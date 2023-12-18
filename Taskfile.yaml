@@ -1,0 +1,21 @@
+version: '3'
+
+tasks:
+  build:
+    cmds:
+      - odin build src/ -out:target/parser -o:none -debug
+    sources:
+      - ./src/**/*.odin
+    generates:
+    - target/parser
+    silent: true
+  
+  run:
+    cmds:
+      - ./target/parser
+    deps: 
+      - build
+    silent: true
+  
+
+interval: 250ms
