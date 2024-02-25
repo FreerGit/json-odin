@@ -3,16 +3,16 @@ version: '3'
 tasks:
   build:
     cmds:
-      - odin build src/ -out:target/parser -o:none -debug
+      - odin build src/ -out:target/json -error-pos-style:unix -o:none -debug -ignore-unknown-attributes 
     sources:
       - ./src/**/*.odin
     generates:
-    - target/parser
+    - target/json
     silent: true
   
   run:
     cmds:
-      - ./target/parser
+      - ./target/json 
     deps: 
       - build
     silent: true
