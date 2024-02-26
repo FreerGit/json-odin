@@ -37,18 +37,16 @@ main :: proc() {
 			}
 			ok := parser.parse_file(&p, &ast_file)
 
-			// log.debug(ast.clone_node(&ast_file.node))
-			// print_tree(ast_file.decls[0])
+
+			assert(ok)
 			for decl in ast_file.decls {
-				print_tree(decl)
+				// print_tree(decl)
+
+				val, is_v := decl.derived_stmt.(^ast.Value_Decl)
+				if is_v && len(val.attributes) > 0 {
+					log.debug(extract_attrs(val))
+				}
 			}
-			// assert(ok)
-			// for decl in ast_file.decls {
-			// 	val, is_v := decl.derived_stmt.(^ast.Value_Decl)
-			// 	if is_v && len(val.attributes) > 0 {
-			// 		log.debug(val.attributes)
-			// 	}
-			// }
 		}
 	}
 
@@ -57,8 +55,62 @@ main :: proc() {
 	// printer.print(&pr)
 	package_location := make(map[string]string)
 	defer delete(package_location)
-
 }
+
+extract_attrs :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings, ok: bool) {
+	// log.debug(val.names[0].derived.(^ast.Ident))
+	struct_ident := val.names[0].derived.(^ast.Ident) or_return
+	for attr in val.attributes {
+		for elem in attr.elems {
+			fv, has_fv := elem.derived.(^ast.Field_Value)
+			ident: ^ast.Ident = nil
+			if has_fv {
+				ident = fv.field.derived.(^ast.Ident) or_else panic("no field")
+
+			} else {
+				ident = elem.derived.(^ast.Ident) or_else panic("no ident")
+			}
+			// log.debug("here")
+			// log.debug(ident)
+			if ident.name == "json" {
+				ms := Marshal_Settings {
+					name = struct_ident.name,
+				}
+				// cmp_lit, has_cmp := fv.value.derived.(^ast.Comp_Lit)
+				// if has_cmp {
+				// 	for elem in cmp_lit.elems {
+				// 		fv, ok := elem.derived.(^ast.Field_Value)
+				// 		assert(ok)
+				// 		ident_key := fv.field.derived.(^ast.Ident) or_return
+				// 		ident_value := fv.value.derived.(^ast.Ident) or_return
+				// 		assert(iok)
+				// 		log.debug(ident_key.name)
+				// 		log.debug(ident_value.name)
+				// 		if ident_key.name == "strict" {
+				// 			ms.strict = ident_value
+				// 		}
+				// 	}
+				// 	return {name = ident.name, strict = true}, true
+				// } else {
+				// 	return {name = ident.name, strict = true}, true
+				// }
+				return ms, true
+			}
+		}
+	}
+
+	return {}, false
+}
+
+Marshal_Settings :: struct {
+	name:   string,
+	strict: bool,
+}
+
+// Marshal_Struct :: struct {
+// 	name:   string,
+// 	strict: bool,
+// }
 
 print_tree :: proc(root_node: ^ast.Node) {
 	visitor := ast.Visitor {
