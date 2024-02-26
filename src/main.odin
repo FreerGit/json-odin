@@ -41,7 +41,7 @@ main :: proc() {
 
 			assert(ok)
 			for decl in ast_file.decls {
-				// print_tree(decl)
+				print_tree(decl)
 
 				val, is_v := decl.derived_stmt.(^ast.Value_Decl)
 				if is_v && len(val.attributes) > 0 {
@@ -88,6 +88,38 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 					name   = struct_ident.name,
 					strict = true,
 				}
+
+				for field in fl.fields.list {
+					field_name, has_fn := field.names[0].derived.(^ast.Ident)
+					field_type, has_ft := field.type.derived.(^ast.Ident)
+					field_type_array, has_at := field.type.derived.(^ast.Array_Type)
+					assert(has_fn)
+					assert(has_ft || has_at)
+					if has_at {
+						w, ii := field_type_array.elem.derived.(^ast.Ident)
+						assert(ii)
+						append_elem(
+							&ms.fields,
+							Field {
+								name = field_name.name,
+								type = w.name,
+								is_slice = true,
+								tag = field.tag.text,
+							},
+						)
+					} else {
+						append_elem(
+							&ms.fields,
+							Field {
+								name = field_name.name,
+								type = field_type.name,
+								is_slice = false,
+								tag = field.tag.text,
+							},
+						)
+					}
+				}
+
 				if has_fv {
 					cmp_lit, has_cmp := fv.value.derived.(^ast.Comp_Lit)
 					log.debug("here")
@@ -116,7 +148,14 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 Marshal_Settings :: struct {
 	name:   string,
 	strict: bool,
-	fields: map[string]any,
+	fields: [dynamic]Field,
+}
+
+Field :: struct {
+	name:     string,
+	type:     string,
+	tag:      string,
+	is_slice: bool,
 }
 
 // Marshal_Struct :: struct {

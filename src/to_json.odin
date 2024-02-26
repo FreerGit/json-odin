@@ -6,7 +6,7 @@ import "deep"
 Employee :: struct {
 	name: string `json:_name`,
 	age:  int `json:Age`,
-	occ:  string,
+	occ:  []string,
 }
 
 
