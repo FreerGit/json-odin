@@ -27,6 +27,7 @@ main :: proc() {
 	fi, dir_err := os.read_dir(handle, -1)
 	assert(dir_err == 0)
 
+	// m["name"] = typeid_of(type_of(a))
 
 	for file_info in fi {
 		if !file_info.is_dir && file_info.name != "main.odin" {
@@ -44,11 +45,13 @@ main :: proc() {
 
 				val, is_v := decl.derived_stmt.(^ast.Value_Decl)
 				if is_v && len(val.attributes) > 0 {
-					log.debug(extract_attrs(val))
+					log.debug(extract_marshal_settings(val))
 				}
 			}
 		}
 	}
+
+	log.debug("done")
 
 	pkg, success := parser.parse_package_from_path("./src", &p)
 	log.debug(pkg, success)
@@ -57,43 +60,51 @@ main :: proc() {
 	defer delete(package_location)
 }
 
-extract_attrs :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings, ok: bool) {
-	// log.debug(val.names[0].derived.(^ast.Ident))
+extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings, ok: bool) {
 	struct_ident := val.names[0].derived.(^ast.Ident) or_return
 	for attr in val.attributes {
+
 		for elem in attr.elems {
+
+
 			fv, has_fv := elem.derived.(^ast.Field_Value)
 			ident: ^ast.Ident = nil
 			if has_fv {
+				// TODO err handling
 				ident = fv.field.derived.(^ast.Ident) or_else panic("no field")
 
 			} else {
+				// TODO err handling
 				ident = elem.derived.(^ast.Ident) or_else panic("no ident")
 			}
-			// log.debug("here")
-			// log.debug(ident)
+
+			fl, has_fl := val.values[0].derived.(^ast.Struct_Type)
+
+			// log.debug(fl.derived.(^ast.Field_List))
+			log.debug(fl.name_count, has_fl)
+
 			if ident.name == "json" {
 				ms := Marshal_Settings {
-					name = struct_ident.name,
+					name   = struct_ident.name,
+					strict = true,
 				}
-				// cmp_lit, has_cmp := fv.value.derived.(^ast.Comp_Lit)
-				// if has_cmp {
-				// 	for elem in cmp_lit.elems {
-				// 		fv, ok := elem.derived.(^ast.Field_Value)
-				// 		assert(ok)
-				// 		ident_key := fv.field.derived.(^ast.Ident) or_return
-				// 		ident_value := fv.value.derived.(^ast.Ident) or_return
-				// 		assert(iok)
-				// 		log.debug(ident_key.name)
-				// 		log.debug(ident_value.name)
-				// 		if ident_key.name == "strict" {
-				// 			ms.strict = ident_value
-				// 		}
-				// 	}
-				// 	return {name = ident.name, strict = true}, true
-				// } else {
-				// 	return {name = ident.name, strict = true}, true
-				// }
+				if has_fv {
+					cmp_lit, has_cmp := fv.value.derived.(^ast.Comp_Lit)
+					log.debug("here")
+					if has_cmp {
+						for elem in cmp_lit.elems {
+							fv, ok := elem.derived.(^ast.Field_Value)
+							assert(ok, "no field value")
+							ident_key := fv.field.derived.(^ast.Ident) or_return
+							ident_value := fv.value.derived.(^ast.Ident) or_return
+							if ident_key.name == "strict" && ident_value.name == "false" {
+								ms.strict = false
+							}
+						}
+					}
+				}
+
+
 				return ms, true
 			}
 		}
@@ -105,6 +116,7 @@ extract_attrs :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings, ok: bool) 
 Marshal_Settings :: struct {
 	name:   string,
 	strict: bool,
+	fields: map[string]any,
 }
 
 // Marshal_Struct :: struct {
