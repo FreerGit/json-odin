@@ -2,6 +2,7 @@ package json
 
 import "core:fmt"
 import "core:log"
+import "core:mem"
 import "core:odin/ast"
 import "core:odin/parser"
 import "core:odin/printer"
@@ -11,26 +12,50 @@ import "core:strconv"
 import "core:strings"
 import "core:time"
 
+
 // create map of package to folder path
 // traverse each file per package and get @json types
 //  // if a @json has non primitive types, simply call the to_json proc of it, from the right package
 
+MARSHAL_GEN_FILENAME := "gen_json.odin"
 
 main :: proc() {
 	context.logger = log.create_console_logger()
+	a: mem.Arena
+	buf: [1024 * 16]byte
+	mem.arena_init(&a, buf[:])
+	arena := mem.arena_allocator(&a)
+	now := time.now()
+	// sb := strings.builder_make(arena)
+	strings.
+	str := strings.concatenate({"hej", "hej"})
+	// strings.write_string(&sb, "hej")
+	// strings.write_string(&sb, "hej")
+	// strings.write_string(&sb, "hej")
+	// strings.write_string(&sb, "hej")
+	// strings.write_string(&sb, "hej")
+	// strings.write_string(&sb, "hej")
+	// strings.write_string(&sb, "hej")
+	// strings.write_string(&sb, "hej")
+	// strings.write_string(&sb, "hej")
+	now_2 := time.now()
+	log.debug(time.duration_nanoseconds(time.diff(now, now_2)))
 	pr := printer.make_printer(printer.default_style)
 	p := parser.Parser{}
-	handle, err := os.open("./src")
+
+	arg := os.args[1]
+	source_path := strings.concatenate({"./", arg})
+
+	handle, err := os.open(source_path)
 	assert(err == 0)
 	defer os.close(handle)
 
 	fi, dir_err := os.read_dir(handle, -1)
 	assert(dir_err == 0)
 
-	// m["name"] = typeid_of(type_of(a))
-
+	marshal_settings: [dynamic]Marshal_Settings
 	for file_info in fi {
-		if !file_info.is_dir && file_info.name != "main.odin" {
+		if !file_info.is_dir && file_info.name != "gen_json.odin" {
 			data := os.read_entire_file(file_info.fullpath) or_else panic("Could not read file")
 			ast_file := ast.File {
 				src      = string(data),
@@ -41,23 +66,60 @@ main :: proc() {
 
 			assert(ok)
 			for decl in ast_file.decls {
-				print_tree(decl)
+				// print_tree(decl)
 
 				val, is_v := decl.derived_stmt.(^ast.Value_Decl)
 				if is_v && len(val.attributes) > 0 {
-					log.debug(extract_marshal_settings(val))
+					setting, ok := extract_marshal_settings(val)
+					append(&marshal_settings, setting)
 				}
 			}
 		}
 	}
 
+	log.debug(marshal_settings)
 	log.debug("done")
 
-	pkg, success := parser.parse_package_from_path("./src", &p)
+	pkg, success := parser.parse_package_from_path(source_path, &p)
 	log.debug(pkg, success)
+
+
+	gen_file := strings.concatenate({pkg.fullpath, "/", MARSHAL_GEN_FILENAME})
+	log.debug("")
+	gen_handle, open_err := os.open(gen_file, os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0o755)
+	log.debug("")
+	if open_err != os.ERROR_NONE {
+		log.error(open_err)
+		panic("could not open gen file")
+	}
+
+	to_write := generate_marshal_procs(MARSHAL_GEN_FILENAME, pkg.name, marshal_settings[:])
+	// data: string = "package json"
+	os.write(gen_handle, transmute([]u8)to_write)
+
 	// printer.print(&pr)
 	package_location := make(map[string]string)
 	defer delete(package_location)
+}
+
+generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marshal_Settings) -> string {
+	using strings
+	sb := builder_make()
+	write_string(&sb, "package ")
+	write_string(&sb, pkg)
+	write_string(&sb, "\n\n")
+	for setting in settings {
+		write_string(&sb, to_lower(setting.name))
+		write_string(&sb, "_to_json :: proc(")
+		write_string(&sb, to_lower(setting.name))
+		write_string(&sb, ": ")
+		write_string(&sb, setting.name)
+		write_string(&sb, ") -> string {\n")
+		write_string(&sb, "}\n")
+		// write_string(&sb)
+
+	}
+	return strings.to_string(sb)
 }
 
 extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings, ok: bool) {
@@ -79,9 +141,6 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 			}
 
 			fl, has_fl := val.values[0].derived.(^ast.Struct_Type)
-
-			// log.debug(fl.derived.(^ast.Field_List))
-			log.debug(fl.name_count, has_fl)
 
 			if ident.name == "json" {
 				ms := Marshal_Settings {
@@ -122,7 +181,6 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 
 				if has_fv {
 					cmp_lit, has_cmp := fv.value.derived.(^ast.Comp_Lit)
-					log.debug("here")
 					if has_cmp {
 						for elem in cmp_lit.elems {
 							fv, ok := elem.derived.(^ast.Field_Value)

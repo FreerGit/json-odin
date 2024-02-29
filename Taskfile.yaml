@@ -3,7 +3,7 @@ version: '3'
 tasks:
   build:
     cmds:
-      - odin build src/ -out:target/json -error-pos-style:unix -o:none -debug -ignore-unknown-attributes 
+      - odin build src/ -out:target/json -error-pos-style:unix -o:speed -ignore-unknown-attributes 
     sources:
       - ./src/**/*.odin
     generates:
@@ -12,7 +12,7 @@ tasks:
   
   run:
     cmds:
-      - ./target/json 
+      - ./target/json test
     deps: 
       - build
     silent: true

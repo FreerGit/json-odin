@@ -54,3 +54,6 @@ dkms.conf
 # Odin
 /target/*
 .task
+
+# generated files
+*gen_json.odin*
