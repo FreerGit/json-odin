@@ -26,10 +26,9 @@ main :: proc() {
 	mem.arena_init(&a, buf[:])
 	arena := mem.arena_allocator(&a)
 	now := time.now()
-	// sb := strings.builder_make(arena)
-	strings.
-	str := strings.concatenate({"hej", "hej"})
-	// strings.write_string(&sb, "hej")
+	sb := strings.builder_make(arena)
+	// strings.
+	strings.write_string(&sb, "hej")
 	// strings.write_string(&sb, "hej")
 	// strings.write_string(&sb, "hej")
 	// strings.write_string(&sb, "hej")

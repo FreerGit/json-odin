@@ -3,7 +3,7 @@ version: '3'
 tasks:
   build:
     cmds:
-      - odin build src/ -out:target/json -error-pos-style:unix -o:speed -ignore-unknown-attributes 
+      - odin build src/ -out:target/json -error-pos-style:unix -o:aggressive -ignore-unknown-attributes 
     sources:
       - ./src/**/*.odin
     generates:
