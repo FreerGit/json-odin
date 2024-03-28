@@ -1,4 +1,4 @@
-package json
+package t
 
 import "deep"
 
@@ -13,6 +13,8 @@ import "deep"
 @(json)
 License :: struct {
 	can_drive: bool,
+	state: string,
+	days_until_expiry: uint,
 }
 /*
 Value_Decl (n_attrs:1) 

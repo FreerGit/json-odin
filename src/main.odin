@@ -1,17 +1,19 @@
 package json
 
+
 import "core:fmt"
 import "core:log"
 import "core:mem"
 import "core:odin/ast"
 import "core:odin/parser"
 import "core:odin/printer"
+import "core:odin/format"
 import "core:os"
 import "core:reflect"
 import "core:strconv"
 import "core:strings"
 import "core:time"
-
+import "core:io"
 
 // create map of package to folder path
 // traverse each file per package and get @json types
@@ -19,26 +21,16 @@ import "core:time"
 
 MARSHAL_GEN_FILENAME := "gen_json.odin"
 
+
+@thread_local sb : strings.Builder 
+
 main :: proc() {
 	context.logger = log.create_console_logger()
 	a: mem.Arena
 	buf: [1024 * 16]byte
 	mem.arena_init(&a, buf[:])
 	arena := mem.arena_allocator(&a)
-	now := time.now()
-	sb := strings.builder_make(arena)
-	// strings.
-	strings.write_string(&sb, "hej")
-	// strings.write_string(&sb, "hej")
-	// strings.write_string(&sb, "hej")
-	// strings.write_string(&sb, "hej")
-	// strings.write_string(&sb, "hej")
-	// strings.write_string(&sb, "hej")
-	// strings.write_string(&sb, "hej")
-	// strings.write_string(&sb, "hej")
-	// strings.write_string(&sb, "hej")
-	now_2 := time.now()
-	log.debug(time.duration_nanoseconds(time.diff(now, now_2)))
+
 	pr := printer.make_printer(printer.default_style)
 	p := parser.Parser{}
 
@@ -61,7 +53,6 @@ main :: proc() {
 				fullpath = file_info.fullpath,
 			}
 			ok := parser.parse_file(&p, &ast_file)
-
 
 			assert(ok)
 			for decl in ast_file.decls {
@@ -101,19 +92,105 @@ main :: proc() {
 	defer delete(package_location)
 }
 
+write_indented :: proc (sb : ^strings.Builder, str: string, ident: int) {
+	for _ in 0..<ident {
+		strings.write_string(sb, "	")
+	}
+	strings.write_string(sb, str)
+}
+
+write_string_builder_start :: proc(sb : ^strings.Builder, field_name: string, ident: int) {
+	using strings
+	write_indented(sb, "write_string(&", 1)
+	write_string(sb, to_lower(field_name))
+	write_string(sb, "_sb, ")
+}
+
+write_given_builder_start :: proc(sb : ^strings.Builder, builder_t: string, field_name: string, ident: int) {
+	using strings
+	write_indented(sb, "write_", 1)
+	write_string(sb, builder_t)
+	write_string(sb, "(&")
+	write_string(sb, to_lower(field_name))
+	write_string(sb, "_sb, ")
+}
+
+write_field_access :: proc(sb: ^strings.Builder, type_name: string, field_name: string) {
+	using strings
+	write_string(sb, type_name)
+	write_string(sb, ".")
+	write_string(sb, field_name)
+}
+
+write_field_value :: proc(sb: ^strings.Builder, field: Field, type_name: string) {
+	using strings
+	write_string_builder_start(sb, type_name, 1)
+	// AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+	
+	log.debug(field.type)
+	switch field.type {
+	case "string":
+		write_field_access(sb, type_name, field.name)	
+	case "bool":
+		// write_string(sb, "write_string(")
+		write_field_access(sb, type_name, field.name)	
+		write_string(sb, " ? \"true\" : \"false\"")
+		case "uint":
+			write_given_builder_start(sb, field.type, type_name, 1)
+		// write_string(sb, "write_string(write_uint(")
+		// write_uint(sb,)
+		write_field_access(sb, type_name, field.name)	
+		
+	case:
+		str, _ := strings.concatenate({"Type (", field.type, ") is not supported for unmarshalling."})
+		unimplemented(str)
+	}
+	write_string(sb, ")\n")
+	log.debug(field.type)
+
+	// parser.
+}
+
 generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marshal_Settings) -> string {
 	using strings
 	sb := builder_make()
 	write_string(&sb, "package ")
 	write_string(&sb, pkg)
 	write_string(&sb, "\n\n")
+	write_string(&sb, "// This file is auto generated through json-odin\n")
+	write_string(&sb, "// For more information, visit: https://github.com/FreerGit/json-odin\n\n")
+	write_string(&sb, "import \"core:strings\"\n\n")
+	write_string(&sb, "import \"core:io\"\n\n")
 	for setting in settings {
+		write_string(&sb, "@thread_local ")
+		write_string(&sb, to_lower(setting.name))
+		write_string(&sb, "_sb : strings.Builder\n")
 		write_string(&sb, to_lower(setting.name))
 		write_string(&sb, "_to_json :: proc(")
 		write_string(&sb, to_lower(setting.name))
-		write_string(&sb, ": ")
+		write_string(&sb, ": ^")
 		write_string(&sb, setting.name)
 		write_string(&sb, ") -> string {\n")
+		write_indented(&sb, "using strings\n", 1)
+		write_string_builder_start(&sb, setting.name, 1)
+		write_string(&sb, "\"{\"")
+		write_string(&sb, ")\n")
+
+		for field in setting.fields {
+			write_string_builder_start(&sb, setting.name, 1)
+			// write_string(&sb, to_lower(setting.name))
+			write_string(&sb, "\"")
+			write_string(&sb, field.name)
+			// write_string(&sb, ")\n")
+			// write_string_builder_start(&sb, setting.name, 1)
+			write_string(&sb, "\\\": \"")
+			write_string(&sb, ")\n")
+			write_field_value(&sb, field, setting.name)
+			// write_string(&sb, ")\n")
+
+		}
+		write_string_builder_start(&sb, setting.name, 1)
+		write_string(&sb, "\"}\")\n")
 		write_string(&sb, "}\n")
 		// write_string(&sb)
 
