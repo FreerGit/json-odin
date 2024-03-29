@@ -61,7 +61,9 @@ main :: proc() {
 
 				val, is_v := decl.derived_stmt.(^ast.Value_Decl)
 				if is_v && len(val.attributes) > 0 {
+					log.debug(val, "\n")
 					setting, ok := extract_marshal_settings(val)
+					// log.debug(setting, ok)
 					append(&marshal_settings, setting)
 				}
 			}
@@ -99,25 +101,20 @@ write_indented :: proc(sb: ^strings.Builder, str: string, ident: int) {
 }
 
 write_string_builder_start :: proc(sb: ^strings.Builder, field_name: string, ident: int) {
-	using strings
-	write_indented(sb, "write_string(&", 1)
-	write_string(sb, to_lower(field_name))
-	write_string(sb, "_sb, ")
+	write_indented(sb, "write_string(sb, ", 1)
 }
 
 write_given_builder_start :: proc(sb: ^strings.Builder, builder_t: string, field_name: string, ident: int) {
 	using strings
 	write_indented(sb, "write_", 1)
 	write_string(sb, builder_t)
-	write_string(sb, "(&")
-	write_string(sb, to_lower(field_name))
-	write_string(sb, "_sb, ")
+	write_string(sb, "(sb, ")
 }
 
 write_field_access :: proc(sb: ^strings.Builder, type_name: string, field: Field) {
 	using strings
 	if field.is_slice {
-		write_string(sb, "ele")	
+		write_string(sb, "ele")
 	} else {
 		write_field_access_by_name(sb, type_name, field)
 	}
@@ -134,8 +131,17 @@ write_field_value :: proc(sb: ^strings.Builder, field: Field, type_name: string)
 	using strings
 	switch field.type {
 	case "string":
+		if field.lowercase {
+
+		} else {
+			write_given_builder_start(sb, "quoted_string", type_name, 1)
+			write_field_access(sb, type_name, field)
+		}
+	case "cstring":
 		write_given_builder_start(sb, "quoted_string", type_name, 1)
+		write_string(sb, "string(")
 		write_field_access(sb, type_name, field)
+		write_string(sb, ")")
 	case "bool":
 		write_string_builder_start(sb, type_name, 1)
 		write_field_access(sb, type_name, field)
@@ -172,10 +178,8 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 		write_string(&sb, to_lower(setting.name))
 		write_string(&sb, ": ^")
 		write_string(&sb, setting.name)
-		write_string(&sb, ", initial_len: int = 256) -> string #no_bounds_check {\n")
+		write_string(&sb, ", sb: ^strings.Builder, initial_len: int = 256) #no_bounds_check {\n")
 		write_indented(&sb, "using strings\n", 1)
-		write_indented(&sb, to_lower(setting.name), 1)
-		write_string(&sb, "_sb := builder_make_len(initial_len)\n")
 		for field, i in setting.fields {
 			write_string_builder_start(&sb, setting.name, 1)
 			if i == 0 {
@@ -188,7 +192,6 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 			write_string(&sb, "\\\":\"")
 			write_string(&sb, ")\n")
 			if field.is_slice {
-				log.debug("IS SLICE")
 				write_string_builder_start(&sb, to_lower(setting.name), 1)
 				write_string(&sb, "\"[\")\n")
 				write_indented(&sb, "for ele, i in &", 1)
@@ -196,7 +199,7 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 				write_string(&sb, " {\n")
 				write_indented(&sb, "", 1)
 				write_field_value(&sb, field, setting.name)
-				
+
 				write_indented(&sb, "if i != len(", 2)
 				write_field_access_by_name(&sb, setting.name, field)
 				// write_string(&sb, to_lower(setting.name))
@@ -207,7 +210,7 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 				write_string_builder_start(&sb, to_lower(setting.name), 1)
 				write_string(&sb, "\",\")\n")
 				write_indented(&sb, "}\n", 2)
-				
+
 				write_indented(&sb, "}\n", 1)
 				write_string_builder_start(&sb, to_lower(setting.name), 1)
 				write_string(&sb, "\"]\")\n")
@@ -216,11 +219,8 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 			}
 		}
 		write_string_builder_start(&sb, setting.name, 1)
-		write_string(&sb, "\"}\")\n\n")
-		write_indented(&sb, "return to_string(", 1)
-		write_string(&sb, to_lower(setting.name))
-		write_string(&sb, "_sb)\n")
-		write_string(&sb, "}\n")
+		write_string(&sb, "\"}\")\n}")
+		// write_indented(&sb, "return to_string(sb^)\n}\n", 1)
 	}
 
 	return strings.to_string(sb)
@@ -244,7 +244,10 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 				ident = elem.derived.(^ast.Ident) or_else panic("no ident")
 			}
 
-			fl, has_fl := val.values[0].derived.(^ast.Struct_Type)
+			as_struct, is_struct := val.values[0].derived.(^ast.Struct_Type)
+			as_enum, is_enum := val.values[0].derived.(^ast.Enum_Type)
+			log.debug(as_struct, is_struct, "\n")
+			log.debug(as_enum, is_enum, "\n")
 
 			if ident.name == "json" {
 				ms := Marshal_Settings {
@@ -252,38 +255,57 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 					strict = true,
 				}
 
-				for field in fl.fields.list {
-					field_name, has_fn := field.names[0].derived.(^ast.Ident)
-					field_type, has_ft := field.type.derived.(^ast.Ident)
-					field_type_array, has_at := field.type.derived.(^ast.Array_Type)
-					assert(has_fn)
-					assert(has_ft || has_at)
-					if has_at {
-						w, ii := field_type_array.elem.derived.(^ast.Ident)
-						// log.debug(field_type_array)
-						assert(ii)
+				if is_enum {
+					for feild in as_enum.fields {
+						field_ident, has_ident := feild.derived.(^ast.Ident)
+						assert(has_ident)
 						append_elem(
 							&ms.fields,
-							Field {
-								name = field_name.name,
-								type = w.name,
-								is_slice = true,
-								tag = field.tag.text,
-							},
+							Field{name = field_ident.name, type = "string", is_slice = false, tag = ""},
 						)
-					} else {
-						append_elem(
-							&ms.fields,
-							Field {
-								name = field_name.name,
-								type = field_type.name,
-								is_slice = false,
-								tag = field.tag.text,
-							},
-						)
+						// field.field_name, has_fn := field.names[0].derived.(^ast.Ident)
+						// field_type, has_ft := field.type.derived.(^ast.Ident)
+						// assert(has_fn)
+						// assert(has_ft || has_at)
 					}
 				}
 
+				if is_struct {
+					for field in as_struct.fields.list {
+						field_name, has_fn := field.names[0].derived.(^ast.Ident)
+						field_type, has_ft := field.type.derived.(^ast.Ident)
+						field_type_array, has_at := field.type.derived.(^ast.Array_Type)
+						assert(has_fn)
+						assert(has_ft || has_at)
+						if has_at {
+							w, ii := field_type_array.elem.derived.(^ast.Ident)
+							// log.debug(field_type_array)
+							assert(ii)
+							append_elem(
+								&ms.fields,
+								Field {
+									name = field_name.name,
+									type = w.name,
+									is_slice = true,
+									tag = field.tag.text,
+								},
+							)
+						} else {
+							append_elem(
+								&ms.fields,
+								Field {
+									name = field_name.name,
+									type = field_type.name,
+									is_slice = false,
+									tag = field.tag.text,
+								},
+							)
+						}
+					}
+
+				}
+
+				log.debug(has_fv)
 				if has_fv {
 					cmp_lit, has_cmp := fv.value.derived.(^ast.Comp_Lit)
 					if has_cmp {
@@ -294,6 +316,11 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 							ident_value := fv.value.derived.(^ast.Ident) or_return
 							if ident_key.name == "strict" && ident_value.name == "false" {
 								ms.strict = false
+							}
+							if is_enum && ident_key.name == "lowercase" && ident_value.name == "true" {
+								for f in &ms.fields {
+									f.lowercase = true
+								}
 							}
 						}
 					}
@@ -315,10 +342,11 @@ Marshal_Settings :: struct {
 }
 
 Field :: struct {
-	name:     string,
-	type:     string,
-	tag:      string,
-	is_slice: bool,
+	name:      string,
+	type:      string,
+	tag:       string,
+	is_slice:  bool,
+	lowercase: bool,
 }
 
 // Marshal_Struct :: struct {
