@@ -2,18 +2,18 @@ package json
 
 
 import "core:fmt"
+import "core:io"
 import "core:log"
 import "core:mem"
 import "core:odin/ast"
+import "core:odin/format"
 import "core:odin/parser"
 import "core:odin/printer"
-import "core:odin/format"
 import "core:os"
 import "core:reflect"
 import "core:strconv"
 import "core:strings"
 import "core:time"
-import "core:io"
 
 // create map of package to folder path
 // traverse each file per package and get @json types
@@ -22,7 +22,8 @@ import "core:io"
 MARSHAL_GEN_FILENAME := "gen_json.odin"
 
 
-@thread_local sb : strings.Builder 
+@(thread_local)
+sb: strings.Builder
 
 main :: proc() {
 	context.logger = log.create_console_logger()
@@ -84,29 +85,27 @@ main :: proc() {
 	}
 
 	to_write := generate_marshal_procs(MARSHAL_GEN_FILENAME, pkg.name, marshal_settings[:])
-	// data: string = "package json"
 	os.write(gen_handle, transmute([]u8)to_write)
 
-	// printer.print(&pr)
 	package_location := make(map[string]string)
 	defer delete(package_location)
 }
 
-write_indented :: proc (sb : ^strings.Builder, str: string, ident: int) {
-	for _ in 0..<ident {
+write_indented :: proc(sb: ^strings.Builder, str: string, ident: int) {
+	for _ in 0 ..< ident {
 		strings.write_string(sb, "	")
 	}
 	strings.write_string(sb, str)
 }
 
-write_string_builder_start :: proc(sb : ^strings.Builder, field_name: string, ident: int) {
+write_string_builder_start :: proc(sb: ^strings.Builder, field_name: string, ident: int) {
 	using strings
 	write_indented(sb, "write_string(&", 1)
 	write_string(sb, to_lower(field_name))
 	write_string(sb, "_sb, ")
 }
 
-write_given_builder_start :: proc(sb : ^strings.Builder, builder_t: string, field_name: string, ident: int) {
+write_given_builder_start :: proc(sb: ^strings.Builder, builder_t: string, field_name: string, ident: int) {
 	using strings
 	write_indented(sb, "write_", 1)
 	write_string(sb, builder_t)
@@ -117,38 +116,36 @@ write_given_builder_start :: proc(sb : ^strings.Builder, builder_t: string, fiel
 
 write_field_access :: proc(sb: ^strings.Builder, type_name: string, field_name: string) {
 	using strings
-	write_string(sb, type_name)
+	write_string(sb, to_lower(type_name))
 	write_string(sb, ".")
 	write_string(sb, field_name)
 }
 
 write_field_value :: proc(sb: ^strings.Builder, field: Field, type_name: string) {
 	using strings
-	write_string_builder_start(sb, type_name, 1)
-	// AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-	
-	log.debug(field.type)
 	switch field.type {
 	case "string":
-		write_field_access(sb, type_name, field.name)	
+		write_given_builder_start(sb, "quoted_string", type_name, 1)
+		write_field_access(sb, type_name, field.name)
 	case "bool":
-		// write_string(sb, "write_string(")
-		write_field_access(sb, type_name, field.name)	
+		write_string_builder_start(sb, type_name, 1)
+		write_field_access(sb, type_name, field.name)
 		write_string(sb, " ? \"true\" : \"false\"")
-		case "uint":
-			write_given_builder_start(sb, field.type, type_name, 1)
-		// write_string(sb, "write_string(write_uint(")
-		// write_uint(sb,)
-		write_field_access(sb, type_name, field.name)	
-		
+	case "uint", "u64", "u32", "u16", "u8":
+		write_given_builder_start(sb, "u64", type_name, 1)
+		write_string(sb, "u64(")
+		write_field_access(sb, type_name, field.name)
+		write_string(sb, ")")
+	case "int", "i64", "i32", "i16", "i8":
+		write_given_builder_start(sb, "i64", type_name, 1)
+		write_string(sb, "i64(")
+		write_field_access(sb, type_name, field.name)
+		write_string(sb, ")")
 	case:
 		str, _ := strings.concatenate({"Type (", field.type, ") is not supported for unmarshalling."})
 		unimplemented(str)
 	}
 	write_string(sb, ")\n")
-	log.debug(field.type)
-
-	// parser.
 }
 
 generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marshal_Settings) -> string {
@@ -160,11 +157,10 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 	write_string(&sb, "// This file is auto generated through json-odin\n")
 	write_string(&sb, "// For more information, visit: https://github.com/FreerGit/json-odin\n\n")
 	write_string(&sb, "import \"core:strings\"\n\n")
-	write_string(&sb, "import \"core:io\"\n\n")
 	for setting in settings {
-		write_string(&sb, "@thread_local ")
+		write_string(&sb, "@(thread_local)\n")
 		write_string(&sb, to_lower(setting.name))
-		write_string(&sb, "_sb : strings.Builder\n")
+		write_string(&sb, "_sb: strings.Builder\n")
 		write_string(&sb, to_lower(setting.name))
 		write_string(&sb, "_to_json :: proc(")
 		write_string(&sb, to_lower(setting.name))
@@ -172,29 +168,31 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 		write_string(&sb, setting.name)
 		write_string(&sb, ") -> string {\n")
 		write_indented(&sb, "using strings\n", 1)
-		write_string_builder_start(&sb, setting.name, 1)
-		write_string(&sb, "\"{\"")
-		write_string(&sb, ")\n")
+		write_indented(&sb, "builder_destroy(&", 1)
+		write_string(&sb, to_lower(setting.name))
+		write_string(&sb, "_sb)\n")
 
-		for field in setting.fields {
+		for field, i in setting.fields {
 			write_string_builder_start(&sb, setting.name, 1)
-			// write_string(&sb, to_lower(setting.name))
-			write_string(&sb, "\"")
+			if i == 0 {
+				write_string(&sb, "\"{\\\"")
+			} else {
+				write_string(&sb, "\", \\\"")
+
+			}
 			write_string(&sb, field.name)
-			// write_string(&sb, ")\n")
-			// write_string_builder_start(&sb, setting.name, 1)
 			write_string(&sb, "\\\": \"")
 			write_string(&sb, ")\n")
 			write_field_value(&sb, field, setting.name)
-			// write_string(&sb, ")\n")
-
 		}
 		write_string_builder_start(&sb, setting.name, 1)
-		write_string(&sb, "\"}\")\n")
+		write_string(&sb, "\"}\")\n\n")
+		write_indented(&sb, "return to_string(", 1)
+		write_string(&sb, to_lower(setting.name))
+		write_string(&sb, "_sb)\n")
 		write_string(&sb, "}\n")
-		// write_string(&sb)
-
 	}
+
 	return strings.to_string(sb)
 }
 

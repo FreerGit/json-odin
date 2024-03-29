@@ -12,7 +12,7 @@ tasks:
   
   run:
     cmds:
-      - ./target/json test
+      - ./target/json test_dir
     deps: 
       - build
     silent: true
