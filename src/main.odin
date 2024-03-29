@@ -158,20 +158,15 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 	write_string(&sb, "// For more information, visit: https://github.com/FreerGit/json-odin\n\n")
 	write_string(&sb, "import \"core:strings\"\n\n")
 	for setting in settings {
-		write_string(&sb, "@(thread_local)\n")
-		write_string(&sb, to_lower(setting.name))
-		write_string(&sb, "_sb: strings.Builder\n")
 		write_string(&sb, to_lower(setting.name))
 		write_string(&sb, "_to_json :: proc(")
 		write_string(&sb, to_lower(setting.name))
 		write_string(&sb, ": ^")
 		write_string(&sb, setting.name)
-		write_string(&sb, ") -> string {\n")
+		write_string(&sb, ", initial_len: int = 256) -> string #no_bounds_check {\n")
 		write_indented(&sb, "using strings\n", 1)
-		write_indented(&sb, "builder_destroy(&", 1)
-		write_string(&sb, to_lower(setting.name))
-		write_string(&sb, "_sb)\n")
-
+		write_indented(&sb, to_lower(setting.name), 1)
+		write_string(&sb, "_sb := builder_make_len(initial_len)\n")
 		for field, i in setting.fields {
 			write_string_builder_start(&sb, setting.name, 1)
 			if i == 0 {
