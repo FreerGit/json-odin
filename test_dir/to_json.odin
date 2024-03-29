@@ -21,6 +21,9 @@ License :: struct {
 	d:                 i16,
 	e:                 i32,
 	f:                 i64,
+	info: 			   []string,
+	int_arr:	       [3]int,
+	cstr:			   cstring
 }
 /*
 Value_Decl (n_attrs:1) 

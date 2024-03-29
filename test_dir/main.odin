@@ -6,7 +6,7 @@ import "core:time"
 
 
 main :: proc() {
-	license := License{false, "Alabama", 55, 99, 15999999, 151515151515151, -5, -15, -999999999999}
+	license := License{false, "Alabama", 55, 99, 15999999, 151515151515151, -5, -15, -999999999999, {"car", "motorcycle"}, {1,2,3}, {"hej"}}
 	_ = license_to_json(&license)
 	_ = license_to_json(&license)
 

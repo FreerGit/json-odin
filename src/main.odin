@@ -114,11 +114,20 @@ write_given_builder_start :: proc(sb: ^strings.Builder, builder_t: string, field
 	write_string(sb, "_sb, ")
 }
 
-write_field_access :: proc(sb: ^strings.Builder, type_name: string, field_name: string) {
+write_field_access :: proc(sb: ^strings.Builder, type_name: string, field: Field) {
+	using strings
+	if field.is_slice {
+		write_string(sb, "ele")	
+	} else {
+		write_field_access_by_name(sb, type_name, field)
+	}
+}
+
+write_field_access_by_name :: proc(sb: ^strings.Builder, type_name: string, field: Field) {
 	using strings
 	write_string(sb, to_lower(type_name))
 	write_string(sb, ".")
-	write_string(sb, field_name)
+	write_string(sb, field.name)
 }
 
 write_field_value :: proc(sb: ^strings.Builder, field: Field, type_name: string) {
@@ -126,20 +135,20 @@ write_field_value :: proc(sb: ^strings.Builder, field: Field, type_name: string)
 	switch field.type {
 	case "string":
 		write_given_builder_start(sb, "quoted_string", type_name, 1)
-		write_field_access(sb, type_name, field.name)
+		write_field_access(sb, type_name, field)
 	case "bool":
 		write_string_builder_start(sb, type_name, 1)
-		write_field_access(sb, type_name, field.name)
+		write_field_access(sb, type_name, field)
 		write_string(sb, " ? \"true\" : \"false\"")
 	case "uint", "u64", "u32", "u16", "u8":
 		write_given_builder_start(sb, "u64", type_name, 1)
 		write_string(sb, "u64(")
-		write_field_access(sb, type_name, field.name)
+		write_field_access(sb, type_name, field)
 		write_string(sb, ")")
 	case "int", "i64", "i32", "i16", "i8":
 		write_given_builder_start(sb, "i64", type_name, 1)
 		write_string(sb, "i64(")
-		write_field_access(sb, type_name, field.name)
+		write_field_access(sb, type_name, field)
 		write_string(sb, ")")
 	case:
 		str, _ := strings.concatenate({"Type (", field.type, ") is not supported for unmarshalling."})
@@ -172,13 +181,39 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 			if i == 0 {
 				write_string(&sb, "\"{\\\"")
 			} else {
-				write_string(&sb, "\", \\\"")
+				write_string(&sb, "\",\\\"")
 
 			}
 			write_string(&sb, field.name)
-			write_string(&sb, "\\\": \"")
+			write_string(&sb, "\\\":\"")
 			write_string(&sb, ")\n")
-			write_field_value(&sb, field, setting.name)
+			if field.is_slice {
+				log.debug("IS SLICE")
+				write_string_builder_start(&sb, to_lower(setting.name), 1)
+				write_string(&sb, "\"[\")\n")
+				write_indented(&sb, "for ele, i in &", 1)
+				write_field_access_by_name(&sb, setting.name, field)
+				write_string(&sb, " {\n")
+				write_indented(&sb, "", 1)
+				write_field_value(&sb, field, setting.name)
+				
+				write_indented(&sb, "if i != len(", 2)
+				write_field_access_by_name(&sb, setting.name, field)
+				// write_string(&sb, to_lower(setting.name))
+				// write_string(&sb, ".")
+				// write_string(&sb, field.name)
+				write_string(&sb, ")-1 {\n")
+				write_indented(&sb, "", 2)
+				write_string_builder_start(&sb, to_lower(setting.name), 1)
+				write_string(&sb, "\",\")\n")
+				write_indented(&sb, "}\n", 2)
+				
+				write_indented(&sb, "}\n", 1)
+				write_string_builder_start(&sb, to_lower(setting.name), 1)
+				write_string(&sb, "\"]\")\n")
+			} else {
+				write_field_value(&sb, field, setting.name)
+			}
 		}
 		write_string_builder_start(&sb, setting.name, 1)
 		write_string(&sb, "\"}\")\n\n")
@@ -225,6 +260,7 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 					assert(has_ft || has_at)
 					if has_at {
 						w, ii := field_type_array.elem.derived.(^ast.Ident)
+						// log.debug(field_type_array)
 						assert(ii)
 						append_elem(
 							&ms.fields,
@@ -567,6 +603,7 @@ Data_Type :: struct {
 	ptr_depth:     int, // eg foo: ^^bar == 2
 	arr_ptr_depth: int, // eg foo: ^^^[]^bar == 3
 }
+
 Array_Type :: enum {
 	Not,
 	Slice,
