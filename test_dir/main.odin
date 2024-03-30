@@ -18,17 +18,13 @@ main :: proc() {
 		-5,
 		-15,
 		-99999,
+		'a',
 		{"a", "b"},
 		{1, 2, 3},
 		"a_cstr",
 		.Car,
 	}
-	// _ = license_to_json(&license)
 
-	fmt.println("warmp")
-	fmt.println("warmp")
-	fmt.println("warmp")
-	fmt.println("warmp")
 	sb := strings.builder_make_len(256)
 	begin := time.tick_now()
 	str: string
@@ -38,8 +34,6 @@ main :: proc() {
 	sb = strings.builder_make_len(256)
 	// }
 	end := time.tick_now()
-
-	// _, _ = json.marshal(license, {spec = .JSON})
 
 	begin_std := time.tick_now()
 	s: []u8

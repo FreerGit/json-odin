@@ -13,6 +13,7 @@ License :: struct {
 	d:                 i16,
 	e:                 i32,
 	f:                 i64,
+	char:              rune,
 	info:              []string,
 	int_arr:           [3]int,
 	cstr:              cstring,

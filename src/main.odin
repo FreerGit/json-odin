@@ -61,26 +61,18 @@ main :: proc() {
 
 				val, is_v := decl.derived_stmt.(^ast.Value_Decl)
 				if is_v && len(val.attributes) > 0 {
-					log.debug(val, "\n")
 					setting, ok := extract_marshal_settings(val)
-					// log.debug(setting, ok)
 					append(&marshal_settings, setting)
 				}
 			}
 		}
 	}
 
-	log.debug(marshal_settings)
-	log.debug("done")
-
 	pkg, success := parser.parse_package_from_path(source_path, &p)
-	log.debug(pkg, success)
-
 
 	gen_file := strings.concatenate({pkg.fullpath, "/", MARSHAL_GEN_FILENAME})
-	log.debug("")
 	gen_handle, open_err := os.open(gen_file, os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0o755)
-	log.debug("")
+
 	if open_err != os.ERROR_NONE {
 		log.error(open_err)
 		panic("could not open gen file")
@@ -100,13 +92,13 @@ write_indented :: proc(sb: ^strings.Builder, str: string, ident: int) {
 	strings.write_string(sb, str)
 }
 
-write_string_builder_start :: proc(sb: ^strings.Builder, field_name: string, ident: int) {
-	write_indented(sb, "write_string(sb, ", 1)
+write_string_builder_start :: proc(sb: ^strings.Builder, ident: int) {
+	write_indented(sb, "write_string(sb, ", ident)
 }
 
 write_given_builder_start :: proc(sb: ^strings.Builder, builder_t: string, field_name: string, ident: int) {
 	using strings
-	write_indented(sb, "write_", 1)
+	write_indented(sb, "write_", ident)
 	write_string(sb, builder_t)
 	write_string(sb, "(sb, ")
 }
@@ -140,8 +132,21 @@ write_field_value :: proc(sb: ^strings.Builder, field: Field, type_name: string)
 		write_string(sb, "string(")
 		write_field_access(sb, type_name, field)
 		write_string(sb, ")")
+	case "rune":
+		if field.is_slice {
+			write_string_builder_start(sb, 1)
+			write_string(sb, "ele")
+		} else {
+			write_string_builder_start(sb, 1)
+			write_string(sb, "\"\\\"\")\n")
+			write_given_builder_start(sb, "rune", type_name, 1)
+			write_field_access_by_name(sb, type_name, field)
+			write_string(sb, ")\n")
+			write_string_builder_start(sb, 1)
+			write_string(sb, "\"\\\"\"")
+		}
 	case "bool":
-		write_string_builder_start(sb, type_name, 1)
+		write_string_builder_start(sb, 1)
 		write_field_access(sb, type_name, field)
 		write_string(sb, " ? \"true\" : \"false\"")
 	case "uint", "u64", "u32", "u16", "u8":
@@ -197,12 +202,12 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 				write_indented(&sb, "case .", 1)
 				write_string(&sb, field.name)
 				write_string(&sb, ":\n	")
-				write_string_builder_start(&sb, setting.name, 1)
+				write_string_builder_start(&sb, 1)
 				write_string(&sb, "\"\\\"")
 				write_string(&sb, field.lowercase ? to_lower(field.name) : field.name)
 				write_string(&sb, "\\\"\"")
 			case .Struct:
-				write_string_builder_start(&sb, setting.name, 1)
+				write_string_builder_start(&sb, 1)
 				if i == 0 {
 					write_string(&sb, "\"{\\\"")
 				} else {
@@ -214,7 +219,7 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 			}
 
 			if field.is_slice {
-				write_string_builder_start(&sb, to_lower(setting.name), 1)
+				write_string_builder_start(&sb, 1)
 				write_string(&sb, "\"[\")\n")
 				write_indented(&sb, "for ele, i in &", 1)
 				write_field_access_by_name(&sb, setting.name, field)
@@ -225,12 +230,12 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 				write_indented(&sb, "if i != len(", 2)
 				write_field_access_by_name(&sb, setting.name, field)
 				write_string(&sb, ")-1 {\n		")
-				write_string_builder_start(&sb, to_lower(setting.name), 1)
+				write_string_builder_start(&sb, 1)
 				write_string(&sb, "\",\")\n")
 				write_indented(&sb, "}\n", 2)
 
 				write_indented(&sb, "}\n", 1)
-				write_string_builder_start(&sb, to_lower(setting.name), 1)
+				write_string_builder_start(&sb, 1)
 				write_string(&sb, "\"]\")\n")
 			} else {
 				write_field_value(&sb, field, setting.name)
@@ -240,7 +245,7 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 		case .Enum:
 			write_indented(&sb, "}", 1)
 		case .Struct:
-			write_string_builder_start(&sb, setting.name, 1)
+			write_string_builder_start(&sb, 1)
 			write_string(&sb, "\"}\")")
 		}
 
@@ -270,8 +275,6 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 
 			as_struct, is_struct := val.values[0].derived.(^ast.Struct_Type)
 			as_enum, is_enum := val.values[0].derived.(^ast.Enum_Type)
-			log.debug(as_struct, is_struct, "\n")
-			log.debug(as_enum, is_enum, "\n")
 
 			if ident.name == "json" {
 				ms := Marshal_Settings {
@@ -307,7 +310,6 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 						assert(has_ft || has_at)
 						if has_at {
 							w, ii := field_type_array.elem.derived.(^ast.Ident)
-							// log.debug(field_type_array)
 							assert(ii)
 							append_elem(
 								&ms.fields,
@@ -335,7 +337,6 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 
 				}
 
-				log.debug(has_fv)
 				if has_fv {
 					cmp_lit, has_cmp := fv.value.derived.(^ast.Comp_Lit)
 					if has_cmp {
