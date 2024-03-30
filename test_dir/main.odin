@@ -21,7 +21,7 @@ main :: proc() {
 		{"a", "b"},
 		{1, 2, 3},
 		"a_cstr",
-		.Car,
+		// .Car,
 	}
 	// _ = license_to_json(&license)
 
@@ -32,8 +32,10 @@ main :: proc() {
 	sb := strings.builder_make_len(256)
 	begin := time.tick_now()
 	str: string
+	xx := License_Type.Motorcycle
 	// for i in 0 ..< 100 {
-	license_to_json(&license, &sb)
+	// license_to_json(&license, &sb)
+	license_type_to_json(xx, &sb)
 	str = strings.to_string(sb)
 	sb = strings.builder_make_len(256)
 	// }
@@ -44,7 +46,7 @@ main :: proc() {
 	begin_std := time.tick_now()
 	s: []u8
 	// for i in 0 ..< 100 {
-	s, _ = json.marshal(license, {spec = .JSON, use_enum_names = true})
+	// s, _ = json.marshal(license, {spec = .JSON, use_enum_names = true})
 	// }
 	end_std := time.tick_now()
 

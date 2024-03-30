@@ -131,9 +131,7 @@ write_field_value :: proc(sb: ^strings.Builder, field: Field, type_name: string)
 	using strings
 	switch field.type {
 	case "string":
-		if field.lowercase {
-
-		} else {
+		if !field.from_enum {
 			write_given_builder_start(sb, "quoted_string", type_name, 1)
 			write_field_access(sb, type_name, field)
 		}
@@ -176,21 +174,40 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 		write_string(&sb, to_lower(setting.name))
 		write_string(&sb, "_to_json :: proc(")
 		write_string(&sb, to_lower(setting.name))
-		write_string(&sb, ": ^")
+		write_string(&sb, ": ")
+		if setting.type == .Struct {
+			write_string(&sb, "^")
+		}
 		write_string(&sb, setting.name)
-		write_string(&sb, ", sb: ^strings.Builder, initial_len: int = 256) #no_bounds_check {\n")
+		write_string(&sb, ", sb: ^strings.Builder) #no_bounds_check {\n")
 		write_indented(&sb, "using strings\n", 1)
+		if setting.type == .Enum {
+			write_indented(&sb, "switch ", 1)
+			write_string(&sb, to_lower(setting.name))
+			write_string(&sb, " {\n")
+		}
 		for field, i in setting.fields {
-			write_string_builder_start(&sb, setting.name, 1)
-			if i == 0 {
-				write_string(&sb, "\"{\\\"")
-			} else {
-				write_string(&sb, "\",\\\"")
+			switch setting.type {
+			case .Enum:
+				write_indented(&sb, "case .", 1)
+				write_string(&sb, field.name)
+				write_string(&sb, ":\n	")
+				write_string_builder_start(&sb, setting.name, 1)
+				write_quoted_string(&sb, field.lowercase ? to_lower(field.name) : field.name)
+			case .Struct:
+				write_string_builder_start(&sb, setting.name, 1)
+				if i == 0 {
+					write_string(&sb, "\"{\\\"")
+				} else {
+					write_string(&sb, "\",\\\"")
 
+				}
+				write_string(&sb, field.name)
+				write_string(&sb, "\\\":\"")
+				write_string(&sb, ")\n")
 			}
-			write_string(&sb, field.name)
-			write_string(&sb, "\\\":\"")
-			write_string(&sb, ")\n")
+
+
 			if field.is_slice {
 				write_string_builder_start(&sb, to_lower(setting.name), 1)
 				write_string(&sb, "\"[\")\n")
@@ -202,11 +219,7 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 
 				write_indented(&sb, "if i != len(", 2)
 				write_field_access_by_name(&sb, setting.name, field)
-				// write_string(&sb, to_lower(setting.name))
-				// write_string(&sb, ".")
-				// write_string(&sb, field.name)
-				write_string(&sb, ")-1 {\n")
-				write_indented(&sb, "", 2)
+				write_string(&sb, ")-1 {\n		")
 				write_string_builder_start(&sb, to_lower(setting.name), 1)
 				write_string(&sb, "\",\")\n")
 				write_indented(&sb, "}\n", 2)
@@ -218,9 +231,15 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 				write_field_value(&sb, field, setting.name)
 			}
 		}
-		write_string_builder_start(&sb, setting.name, 1)
-		write_string(&sb, "\"}\")\n}")
-		// write_indented(&sb, "return to_string(sb^)\n}\n", 1)
+		switch setting.type {
+		case .Enum:
+			write_indented(&sb, "}", 1)
+		case .Struct:
+			write_string_builder_start(&sb, setting.name, 1)
+			write_string(&sb, "\"}\")")
+		}
+
+		write_string(&sb, "\n}\n\n")
 	}
 
 	return strings.to_string(sb)
@@ -256,21 +275,25 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 				}
 
 				if is_enum {
-					for feild in as_enum.fields {
-						field_ident, has_ident := feild.derived.(^ast.Ident)
+					ms.type = .Enum
+					for field in as_enum.fields {
+						field_ident, has_ident := field.derived.(^ast.Ident)
 						assert(has_ident)
 						append_elem(
 							&ms.fields,
-							Field{name = field_ident.name, type = "string", is_slice = false, tag = ""},
+							Field {
+								name = field_ident.name,
+								type = "string",
+								is_slice = false,
+								tag = "",
+								from_enum = true,
+							},
 						)
-						// field.field_name, has_fn := field.names[0].derived.(^ast.Ident)
-						// field_type, has_ft := field.type.derived.(^ast.Ident)
-						// assert(has_fn)
-						// assert(has_ft || has_at)
 					}
 				}
 
 				if is_struct {
+					ms.type = .Struct
 					for field in as_struct.fields.list {
 						field_name, has_fn := field.names[0].derived.(^ast.Ident)
 						field_type, has_ft := field.type.derived.(^ast.Ident)
@@ -288,6 +311,7 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 									type = w.name,
 									is_slice = true,
 									tag = field.tag.text,
+									from_enum = false,
 								},
 							)
 						} else {
@@ -298,6 +322,7 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 									type = field_type.name,
 									is_slice = false,
 									tag = field.tag.text,
+									from_enum = false,
 								},
 							)
 						}
@@ -338,7 +363,13 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 Marshal_Settings :: struct {
 	name:   string,
 	strict: bool,
+	type:   Odin_Type,
 	fields: [dynamic]Field,
+}
+
+Odin_Type :: enum {
+	Struct,
+	Enum,
 }
 
 Field :: struct {
@@ -346,6 +377,7 @@ Field :: struct {
 	type:      string,
 	tag:       string,
 	is_slice:  bool,
+	from_enum: bool,
 	lowercase: bool,
 }
 
