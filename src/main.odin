@@ -159,6 +159,11 @@ write_field_value :: proc(sb: ^strings.Builder, field: Field, type_name: string)
 		write_string(sb, "i64(")
 		write_field_access(sb, type_name, field)
 		write_string(sb, ")")
+	case "f64", "f32", "f16":
+		write_given_builder_start(sb, "f64", type_name, 1)
+		write_string(sb, "f64(")
+		write_field_access(sb, type_name, field)
+		write_string(sb, "), 'f'")
 	case:
 		log.warn("Unknown type:", field.type, "<- might be recursive, otherwise unsupported.")
 		write_indented(sb, to_lower(field.type), 1)
