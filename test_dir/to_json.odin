@@ -16,7 +16,7 @@ License :: struct {
 	info:              []string,
 	int_arr:           [3]int,
 	cstr:              cstring,
-	// a_enum:            License_Type,
+	a_enum:            License_Type,
 }
 
 @(json = {lowercase = true}) // lowercase is by default false

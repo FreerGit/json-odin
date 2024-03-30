@@ -155,8 +155,13 @@ write_field_value :: proc(sb: ^strings.Builder, field: Field, type_name: string)
 		write_field_access(sb, type_name, field)
 		write_string(sb, ")")
 	case:
-		str, _ := strings.concatenate({"Type (", field.type, ") is not supported for unmarshalling."})
-		unimplemented(str)
+		log.warn("Unknown type:", field.type, "<- might be recursive, otherwise unsupported.")
+		write_indented(sb, to_lower(field.type), 1)
+		write_string(sb, "_to_json(")
+		write_string(sb, to_lower(type_name))
+		write_string(sb, ".")
+		write_string(sb, field.name)
+		write_string(sb, ", sb")
 	}
 	write_string(sb, ")\n")
 }
@@ -193,20 +198,20 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 				write_string(&sb, field.name)
 				write_string(&sb, ":\n	")
 				write_string_builder_start(&sb, setting.name, 1)
-				write_quoted_string(&sb, field.lowercase ? to_lower(field.name) : field.name)
+				write_string(&sb, "\"\\\"")
+				write_string(&sb, field.lowercase ? to_lower(field.name) : field.name)
+				write_string(&sb, "\\\"\"")
 			case .Struct:
 				write_string_builder_start(&sb, setting.name, 1)
 				if i == 0 {
 					write_string(&sb, "\"{\\\"")
 				} else {
 					write_string(&sb, "\",\\\"")
-
 				}
 				write_string(&sb, field.name)
 				write_string(&sb, "\\\":\"")
 				write_string(&sb, ")\n")
 			}
-
 
 			if field.is_slice {
 				write_string_builder_start(&sb, to_lower(setting.name), 1)
