@@ -25,6 +25,8 @@ MARSHAL_GEN_FILENAME := "gen_json.odin"
 @(thread_local)
 sb: strings.Builder
 
+import "core:c"
+
 main :: proc() {
 	context.logger = log.create_console_logger()
 	a: mem.Arena
@@ -165,9 +167,14 @@ write_field_value :: proc(sb: ^strings.Builder, field: Field, type_name: string)
 		write_field_access(sb, type_name, field)
 		write_string(sb, "), 'f'")
 	case:
+		log.warn(field)
 		log.warn("Unknown type:", field.type, "<- might be recursive, otherwise unsupported.")
 		write_indented(sb, to_lower(field.type), 1)
-		write_string(sb, "_to_json(")
+		if field.from_enum {
+			write_string(sb, "_to_json(")
+		} else {
+			write_string(sb, "_to_json(&")
+		}
 		write_string(sb, to_lower(type_name))
 		write_string(sb, ".")
 		write_string(sb, field.name)
@@ -201,7 +208,7 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 			write_string(&sb, to_lower(setting.name))
 			write_string(&sb, " {\n")
 		}
-		for field, i in setting.fields {
+		for &field, i in setting.fields {
 			switch setting.type {
 			case .Enum:
 				write_indented(&sb, "case .", 1)
@@ -243,6 +250,10 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 				write_string_builder_start(&sb, 1)
 				write_string(&sb, "\"]\")\n")
 			} else {
+				log.warn(setting.type, "now")
+				if setting.type == Odin_Type.Enum {
+					field.from_enum = true
+				}
 				write_field_value(&sb, field, setting.name)
 			}
 		}

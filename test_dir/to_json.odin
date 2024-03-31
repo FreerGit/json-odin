@@ -3,25 +3,30 @@ package test_dir
 import "deep"
 
 @(json)
-License :: struct {
-	can_drive:         bool,
-	state:             string,
-	days_until_expiry: uint,
-	a:                 u16,
-	b:                 u32,
-	c:                 u64,
-	d:                 i16,
-	e:                 i32,
-	f:                 i64,
-	char:              rune,
-	info:              []string,
-	int_arr:           [3]int,
-	cstr:              cstring,
-	a_enum:            License_Type,
+A_Struct :: struct {
+	a_enum:        A_Enum,
+	deeper_struct: A_Second_Struct,
+	a_bool:        bool,
+	a_string:      string,
+	a:             u16,
+	b:             u32,
+	c:             u64,
+	d:             i16,
+	e:             i32,
+	f:             f64,
+	char:          rune,
+	info:          []string,
+	int_arr:       [3]int,
+	cstr:          cstring,
+}
+
+@(json)
+A_Second_Struct :: struct {
+	that_contains_an_enum: A_Enum,
 }
 
 @(json = {lowercase = true}) // lowercase is by default false
-License_Type :: enum {
+A_Enum :: enum {
 	Motorcycle,
 	Car,
 }
