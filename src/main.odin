@@ -70,6 +70,9 @@ main :: proc() {
 		}
 	}
 
+	// Fix up enum types
+
+
 	pkg, success := parser.parse_package_from_path(source_path, &p)
 
 	gen_file := strings.concatenate({pkg.fullpath, "/", MARSHAL_GEN_FILENAME})
@@ -122,6 +125,7 @@ write_field_access_by_name :: proc(sb: ^strings.Builder, type_name: string, fiel
 }
 
 write_field_value :: proc(sb: ^strings.Builder, field: Field, type_name: string) {
+	log.debug(field)
 	using strings
 	switch field.type {
 	case "string":
@@ -321,6 +325,7 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 					for field in as_struct.fields.list {
 						field_name, has_fn := field.names[0].derived.(^ast.Ident)
 						field_type, has_ft := field.type.derived.(^ast.Ident)
+						field_enum, is_enum := field_type.derived.(^ast.Enum_Type)
 						field_type_array, has_at := field.type.derived.(^ast.Array_Type)
 						assert(has_fn)
 						assert(has_ft || has_at)
@@ -338,6 +343,7 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 								},
 							)
 						} else {
+							log.debug("here", is_enum, has_fn, has_fn)
 							append_elem(
 								&ms.fields,
 								Field {
@@ -345,7 +351,7 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 									type = field_type.name,
 									is_slice = false,
 									tag = field.tag.text,
-									from_enum = false,
+									from_enum = is_enum,
 								},
 							)
 						}
