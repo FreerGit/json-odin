@@ -7,7 +7,6 @@ A_Struct :: struct {
 	a_enum:        A_Enum,
 	deeper_struct: A_Second_Struct,
 	a_bool:        bool,
-	x:             string,
 	// deep_array:    [][]int,
 	// a_string: string,
 	// a:        u16,
@@ -17,7 +16,7 @@ A_Struct :: struct {
 	// e: f64,
 	f:             f64,
 	// char:     rune,
-	info:          [][]uint,
+	info:          [][2]int,
 	// int_arr:  [3]int,
 	// cstr:     cstring,
 }
