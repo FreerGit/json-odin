@@ -17,78 +17,76 @@ write_string_builder_start :: proc(sb: ^strings.Builder, ident: int) {
 	write_indented(sb, "write_string(sb, ", ident)
 }
 
-write_given_builder_start :: proc(sb: ^strings.Builder, builder_t: string, field_name: string, ident: int) {
+write_given_builder_start :: proc(sb: ^strings.Builder, builder_t: string, ident: int) {
 	using strings
 	write_indented(sb, "write_", ident)
 	write_string(sb, builder_t)
 	write_string(sb, "(sb, ")
 }
 
-write_field_access :: proc(sb: ^strings.Builder, type_name: string, field: Odin_Field) {
+write_field_access_by_name :: proc(
+	sb: ^strings.Builder,
+	type_name: string,
+	field: Odin_Field,
+	to_access: bool,
+) {
 	using strings
-	if field.type.is_array {
-		write_string(sb, "ele")
-	} else {
-		write_field_access_by_name(sb, type_name, field)
+	write_string(sb, to_lower(type_name))
+	if to_access {
+		write_string(sb, ".")
+		write_string(sb, field.name)
 	}
 }
 
-write_field_access_by_name :: proc(sb: ^strings.Builder, type_name: string, field: Odin_Field) {
-	using strings
-	write_string(sb, to_lower(type_name))
-	write_string(sb, ".")
-	write_string(sb, field.name)
-}
-
-write_field_value :: proc(sb: ^strings.Builder, field: Odin_Field, type_name: string) {
-	log.debug(field)
+write_field_value :: proc(sb: ^strings.Builder, field: Odin_Field, type_name: string, to_access: bool) {
 	using strings
 	switch field.type.kind {
 	case "string":
 		if !field.type.is_enum {
-			write_given_builder_start(sb, "quoted_string", type_name, 1)
-			write_field_access(sb, type_name, field)
+			write_given_builder_start(sb, "quoted_string", 1)
+			write_field_access_by_name(sb, type_name, field, to_access)
 		}
 	case "cstring":
-		write_given_builder_start(sb, "quoted_string", type_name, 1)
+		write_given_builder_start(sb, "quoted_string", 1)
 		write_string(sb, "string(")
-		write_field_access(sb, type_name, field)
+		write_field_access_by_name(sb, type_name, field, to_access)
 		write_string(sb, ")")
 	case "rune":
-		if field.type.is_array {
-			write_string_builder_start(sb, 1)
-			write_string(sb, "ele")
-		} else {
-			write_string_builder_start(sb, 1)
-			write_string(sb, "\"\\\"\")\n")
-			write_given_builder_start(sb, "rune", type_name, 1)
-			write_field_access_by_name(sb, type_name, field)
-			write_string(sb, ")\n")
-			write_string_builder_start(sb, 1)
-			write_string(sb, "\"\\\"\"")
-		}
+	// if field.type.is_array {
+	// 	write_string_builder_start(sb, 1)
+	// 	write_string(sb, "ele")
+	// } else {
+	// 	write_string_builder_start(sb, 1)
+	// 	write_string(sb, "\"\\\"\")\n")
+	// 	write_field_access_by_name(sb, "rune", type_name, 1)
+	// 	write_field_access_by_name(sb, type_name, field)
+	// 	write_string(sb, ")\n")
+	// 	write_string_builder_start(sb, 1)
+	// 	write_string(sb, "\"\\\"\"")
+	// }
 	case "bool":
 		write_string_builder_start(sb, 1)
-		write_field_access(sb, type_name, field)
+		write_field_access_by_name(sb, type_name, field, to_access)
 		write_string(sb, " ? \"true\" : \"false\"")
 	case "uint", "u64", "u32", "u16", "u8":
-		write_given_builder_start(sb, "u64", type_name, 1)
+		write_given_builder_start(sb, "u64", 1)
 		write_string(sb, "u64(")
-		write_field_access(sb, type_name, field)
+		write_field_access_by_name(sb, type_name, field, to_access)
 		write_string(sb, ")")
 	case "int", "i64", "i32", "i16", "i8":
-		write_given_builder_start(sb, "i64", type_name, 1)
+		write_given_builder_start(sb, "i64", 1)
 		write_string(sb, "i64(")
-		write_field_access(sb, type_name, field)
+		write_field_access_by_name(sb, type_name, field, to_access)
 		write_string(sb, ")")
 	case "f64", "f32", "f16":
-		write_given_builder_start(sb, "f64", type_name, 1)
+		// TODO
+		write_given_builder_start(sb, "f64", 1)
 		write_string(sb, "f64(")
-		write_field_access(sb, type_name, field)
+		write_field_access_by_name(sb, type_name, field, to_access)
 		write_string(sb, "), 'f'")
 	case:
-		log.warn(field)
-		log.warn("Unknown type:", field.type, "<- might be recursive, otherwise unsupported.")
+		// log.warn(field)
+		log.warn("Unknown type:", field.type.kind, "<- might be recursive, otherwise unsupported.")
 		write_indented(sb, to_lower(field.type.kind), 1)
 		if field.type.is_enum {
 			write_string(sb, "_to_json(")
@@ -102,6 +100,77 @@ write_field_value :: proc(sb: ^strings.Builder, field: Odin_Field, type_name: st
 	}
 	write_string(sb, ")\n")
 }
+
+import "core:fmt"
+
+write_for_loops :: proc(sb: ^strings.Builder, name: string, field: Odin_Field, start_ident: int) {
+	using strings
+
+	builder := strings.builder_make()
+	prev_access_name := ""
+	name_with_access := fmt.sbprintf(&builder, "%s.%s", name, field.name)
+	list_of_prev_names: [dynamic]string = {to_lower(clone(name_with_access))}
+	builder_destroy(&builder)
+
+	assert(field.type.is_array)
+	write_string_builder_start(sb, 1)
+	write_string(sb, "\"[\")\n")
+	for depth in 0 ..< field.type.ptr_depth {
+		defer builder_destroy(&builder)
+		access_name := fmt.sbprintf(&builder, "%s%d", "ele_", depth)
+		write_indented(sb, "for ", start_ident + depth)
+		write_string(sb, access_name)
+		write_string(sb, ", i in ")
+		if (depth == 0) {
+			write_field_access_by_name(sb, name, field, true)
+		} else {
+			write_string(sb, prev_access_name)
+		}
+
+		write_string(sb, " {\n")
+		if start_ident + depth != field.type.ptr_depth {
+			write_string_builder_start(sb, start_ident + depth + 1)
+			write_string(sb, "\"[\")\n")
+		}
+
+		if (depth == field.type.ptr_depth - 1) {
+			if field.type.arr_len_fixed != 0 {
+
+			} else {
+				write_indented(sb, "", field.type.ptr_depth)
+				write_field_value(sb, field, access_name, false)
+				write_indented(sb, "if i != len(", start_ident + depth + 1)
+				write_string(sb, prev_access_name)
+				write_string(sb, ") - 1 {\n")
+				write_string_builder_start(sb, start_ident + depth + 2)
+				write_string(sb, "\",\")\n")
+				write_indented(sb, "}\n", start_ident + depth + 1)
+			}
+		}
+
+		append(&list_of_prev_names, clone(access_name))
+		prev_access_name = clone(access_name)
+	}
+
+	for i := field.type.ptr_depth - start_ident; i >= 0; i -= 1 {
+		if start_ident + i != field.type.ptr_depth {
+			write_string_builder_start(sb, start_ident + i + 1)
+			write_string(sb, "\"]\")\n")
+			write_indented(sb, "if i != len(", start_ident + i + 1)
+			write_string(sb, list_of_prev_names[i])
+
+			write_string(sb, ") - 1 {\n")
+			write_string_builder_start(sb, start_ident + i + 2)
+			write_string(sb, "\",\")\n")
+			write_indented(sb, "}\n", start_ident + i + 1)
+		}
+		write_indented(sb, "}\n", start_ident + i)
+	}
+
+	write_string_builder_start(sb, 1)
+	write_string(sb, "\"]\")\n")
+}
+
 
 generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marshal_Settings) -> string {
 	using strings
@@ -151,30 +220,12 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 			}
 
 			if field.type.is_array {
-				write_string_builder_start(&sb, 1)
-				write_string(&sb, "\"[\")\n")
-				write_indented(&sb, "for ele, i in &", 1)
-				write_field_access_by_name(&sb, setting.name, field)
-				write_string(&sb, " {\n")
-				write_indented(&sb, "", 1)
-				write_field_value(&sb, field, setting.name)
-
-				write_indented(&sb, "if i != len(", 2)
-				write_field_access_by_name(&sb, setting.name, field)
-				write_string(&sb, ")-1 {\n		")
-				write_string_builder_start(&sb, 1)
-				write_string(&sb, "\",\")\n")
-				write_indented(&sb, "}\n", 2)
-
-				write_indented(&sb, "}\n", 1)
-				write_string_builder_start(&sb, 1)
-				write_string(&sb, "\"]\")\n")
+				write_for_loops(&sb, setting.name, field, 1)
 			} else {
-				log.warn(setting.type, "now")
 				if setting.type == Odin_Type.Enum {
 					field.type.is_enum = true
 				}
-				write_field_value(&sb, field, setting.name)
+				write_field_value(&sb, field, setting.name, true)
 			}
 		}
 		switch setting.type {

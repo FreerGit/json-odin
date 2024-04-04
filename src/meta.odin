@@ -1,6 +1,8 @@
 package json
 
+import "core:log"
 import "core:odin/ast"
+import "core:strconv"
 
 Marshal_Settings :: struct {
 	name:   string,
@@ -30,13 +32,33 @@ Data_Type :: struct {
 	ptr_depth:     int, // [][]bar == 2
 }
 
+// TODO handle keys such as static, lowercase.
+// if has_fv {
+// 	cmp_lit, has_cmp := fv.value.derived.(^ast.Comp_Lit)
+// 	if has_cmp {
+// 		for elem in cmp_lit.elems {
+// 			fv, ok := elem.derived.(^ast.Field_Value)
+// 			assert(ok, "no field value")
+// 			ident_key := fv.field.derived.(^ast.Ident) or_return
+// 			ident_value := fv.value.derived.(^ast.Ident) or_return
+// 			if ident_key.name == "strict" && ident_value.name == "false" {
+// 				ms.strict = false
+// 			}
+// 			if is_enum && ident_key.name == "lowercase" && ident_value.name == "true" {
+// 				for f in &ms.fields {
+// 					f.lowercase = true
+// 				}
+// 			}
+// 		}
+// 	}
+// }
+
 
 extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings, ok: bool) {
 	type_ident, to_extract := val.names[0].derived.(^ast.Ident)
 	assert(to_extract)
 	for attr in val.attributes {
 		for elem in attr.elems {
-
 
 			fv, has_fv := elem.derived.(^ast.Field_Value)
 			ident: ^ast.Ident = nil
@@ -60,7 +82,7 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 				if is_struct {
 					ms.type = .Struct
 					for field in as_struct.fields.list {
-						set_fields(&ms, field, .Struct)
+						set_struct_fields(&ms, field, .Struct)
 					}
 				} else if is_enum {
 					ms.type = .Enum
@@ -77,27 +99,6 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 						)
 					}
 				}
-
-				// if has_fv {
-				// 	cmp_lit, has_cmp := fv.value.derived.(^ast.Comp_Lit)
-				// 	if has_cmp {
-				// 		for elem in cmp_lit.elems {
-				// 			fv, ok := elem.derived.(^ast.Field_Value)
-				// 			assert(ok, "no field value")
-				// 			ident_key := fv.field.derived.(^ast.Ident) or_return
-				// 			ident_value := fv.value.derived.(^ast.Ident) or_return
-				// 			if ident_key.name == "strict" && ident_value.name == "false" {
-				// 				ms.strict = false
-				// 			}
-				// 			if is_enum && ident_key.name == "lowercase" && ident_value.name == "true" {
-				// 				for f in &ms.fields {
-				// 					f.lowercase = true
-				// 				}
-				// 			}
-				// 		}
-				// 	}
-				// }
-
 
 				return ms, true
 			}
@@ -124,24 +125,55 @@ fixup_enum_types :: proc(ms: ^[dynamic]Marshal_Settings) {
 
 }
 
-set_fields :: proc(ms: ^Marshal_Settings, field: ^ast.Field, t: Odin_Type) {
+set_struct_fields :: proc(ms: ^Marshal_Settings, field: ^ast.Field, t: Odin_Type) {
 	field_type, has_ft := field.type.derived.(^ast.Ident)
 	field_info, has_info := field.names[0].derived.(^ast.Ident)
-	// log.debug(field_type)
-	// TODO is_ident is false, array for example.
+	field_array, has_array := field.type.derived.(^ast.Array_Type)
+
 	if has_ft && has_info {
 		field_enum, is_enum := field_type.derived.(^ast.Enum_Type)
 		field_struct, is_struct := field_type.derived.(^ast.Struct_Type)
 
-		field_type_array, has_at := field.type.derived.(^ast.Array_Type)
-		field_ident, has_ident := field.derived.(^ast.Ident)
 		data_type := Data_Type {
-			kind          = field_type.name,
-			is_enum       = is_enum,
-			is_array      = has_at,
-			arr_len_fixed = 0, // TODO
-			ptr_depth     = 0, // TODO
+			kind     = field_type.name,
+			is_enum  = is_enum,
+			is_array = has_array,
 		}
 		append_elem(&ms.fields, Odin_Field{name = field_info.name, type = data_type, tag = ""})
+	} else if has_array && has_info {
+		// TODO handle fixed sizes
+		data_type := Data_Type {
+			is_array = true,
+		}
+		array_ident, has_ident := field_array.elem.derived.(^ast.Ident)
+		array_type, is_nested := field.type.derived.(^ast.Array_Type)
+		if has_ident {
+			data_type.ptr_depth += 1
+			data_type.kind = array_ident.name
+		} else {
+			for {
+				// walk down the array types until indent (normal type)
+				array_ident, bottom := array_type.elem.derived.(^ast.Ident)
+				data_type.ptr_depth += 1
+				if bottom {
+					if array_type.len != nil {
+						len_str := array_type.len.derived.(^ast.Basic_Lit).tok.text
+						len_int, ok := strconv.parse_int(len_str)
+						assert(ok)
+						data_type.arr_len_fixed = len_int
+					}
+					data_type.kind = array_ident.name
+					break
+				}
+				array_type, is_nested = array_type.elem.derived.(^ast.Array_Type)
+				assert(is_nested)
+			}
+
+		}
+
+		append_elem(&ms.fields, Odin_Field{name = field_info.name, type = data_type, tag = ""})
+
+	} else {
+		panic("?")
 	}
 }
