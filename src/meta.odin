@@ -4,7 +4,7 @@ import "core:log"
 import "core:odin/ast"
 import "core:strconv"
 
-Marshal_Settings :: struct {
+Gen_Settings :: struct {
 	name:   string,
 	strict: bool,
 	type:   Odin_Type,
@@ -54,7 +54,7 @@ Data_Type :: struct {
 // }
 
 
-extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings, ok: bool) {
+extract_gen_settings :: proc(val: ^ast.Value_Decl) -> (ms: Gen_Settings, ok: bool) {
 	type_ident, to_extract := val.names[0].derived.(^ast.Ident)
 	assert(to_extract)
 	for attr in val.attributes {
@@ -73,9 +73,10 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 
 
 			if ident.name == "json" {
+
 				as_struct, is_struct := val.values[0].derived.(^ast.Struct_Type)
 				as_enum, is_enum := val.values[0].derived.(^ast.Enum_Type)
-				ms := Marshal_Settings {
+				ms := Gen_Settings {
 					name   = type_ident.name,
 					strict = true,
 				}
@@ -108,12 +109,12 @@ extract_marshal_settings :: proc(val: ^ast.Value_Decl) -> (ms: Marshal_Settings,
 	return {}, false
 }
 
-fixup_enum_types :: proc(ms: ^[dynamic]Marshal_Settings) {
-	ms := ms
+fixup_enum_types :: proc(gs: ^[dynamic]Gen_Settings) {
+	gs := gs
 	// Find all enums and update the ms for fields that are actually enums.
-	for &setting in ms {
+	for &setting in gs {
 		if setting.type == .Enum {
-			for &enum_setting in ms {
+			for &enum_setting in gs {
 				for &field in enum_setting.fields {
 					if field.type.kind == setting.name {
 						field.type.is_enum = true
@@ -125,7 +126,7 @@ fixup_enum_types :: proc(ms: ^[dynamic]Marshal_Settings) {
 
 }
 
-set_struct_fields :: proc(ms: ^Marshal_Settings, field: ^ast.Field, t: Odin_Type) {
+set_struct_fields :: proc(ms: ^Gen_Settings, field: ^ast.Field, t: Odin_Type) {
 	field_type, has_ft := field.type.derived.(^ast.Ident)
 	field_info, has_info := field.names[0].derived.(^ast.Ident)
 	field_array, has_array := field.type.derived.(^ast.Array_Type)

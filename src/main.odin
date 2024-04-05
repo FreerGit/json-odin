@@ -30,7 +30,7 @@ main :: proc() {
 	fi, dir_err := os.read_dir(handle, -1)
 	assert(dir_err == 0)
 
-	marshal_settings: [dynamic]Marshal_Settings
+	gen_settings: [dynamic]Gen_Settings
 	for file_info in fi {
 		if !file_info.is_dir && file_info.name != "gen_json.odin" {
 			data := os.read_entire_file(file_info.fullpath) or_else panic("Could not read file")
@@ -46,18 +46,19 @@ main :: proc() {
 
 				val, is_v := decl.derived_stmt.(^ast.Value_Decl)
 				if is_v && len(val.attributes) > 0 {
-					setting, ok := extract_marshal_settings(val)
-					append(&marshal_settings, setting)
+					setting, ok := extract_gen_settings(val)
+					if ok {
+						append(&gen_settings, setting)
+					}
 				}
 			}
 		}
 
 	}
 
-	fixup_enum_types(&marshal_settings)
-	log.debug(marshal_settings)
-
 	// Fix up enum types
+	fixup_enum_types(&gen_settings)
+	log.debug(gen_settings)
 
 
 	pkg, success := parser.parse_package_from_path(source_path, &p)
@@ -70,8 +71,12 @@ main :: proc() {
 		panic("could not open gen file")
 	}
 
-	to_write := generate_marshal_procs(MARSHAL_GEN_FILENAME, pkg.name, marshal_settings[:])
-	os.write(gen_handle, transmute([]u8)to_write)
+	header := generate_file_header(MARSHAL_GEN_FILENAME, pkg.name, gen_settings[:])
+	os.write(gen_handle, transmute([]u8)header)
+	marshal_procs := generate_marshal_procs(MARSHAL_GEN_FILENAME, pkg.name, gen_settings[:])
+	os.write(gen_handle, transmute([]u8)marshal_procs)
+	// unmarshal_procs := generate_unmarshal_procs(MARSHAL_GEN_FILENAME, pkg.name, gen_settings[:])
+	// os.write(gen_handle, transmute([]u8)unmarshal_procs)
 
 	package_location := make(map[string]string)
 	defer delete(package_location)

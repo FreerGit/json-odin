@@ -190,8 +190,7 @@ write_for_loops :: proc(sb: ^strings.Builder, name: string, field: Odin_Field, s
 	write_string(sb, "\"]\")\n")
 }
 
-
-generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marshal_Settings) -> string {
+generate_file_header :: proc(file_name: string, pkg: string, settings: []Gen_Settings) -> string {
 	using strings
 	sb := builder_make()
 	write_string(&sb, "package ")
@@ -200,6 +199,12 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 	write_string(&sb, "// This file is auto generated through json-odin\n")
 	write_string(&sb, "// For more information, visit: https://github.com/FreerGit/json-odin\n\n")
 	write_string(&sb, "import \"core:strings\"\n\n")
+	return to_string(sb)
+}
+
+generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Gen_Settings) -> string {
+	using strings
+	sb := builder_make()
 	for setting in settings {
 		write_string(&sb, to_lower(setting.name))
 		write_string(&sb, "_to_json :: proc(")
@@ -259,4 +264,70 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Marsh
 	}
 
 	return strings.to_string(sb)
+}
+
+
+generate_unmarshal_procs :: proc(file_name: string, pkg: string, settings: []Gen_Settings) -> string {
+	using strings
+	sb := builder_make()
+	for setting in settings {
+		write_string(&sb, to_lower(setting.name))
+		write_string(&sb, "_from_json :: proc(")
+		write_string(&sb, to_lower(setting.name))
+		write_string(&sb, ": ")
+		if setting.type == .Struct {
+			write_string(&sb, "^")
+		}
+		write_string(&sb, setting.name)
+		write_string(&sb, ", sb: ^strings.Builder) #no_bounds_check {\n")
+		write_indented(&sb, "using strings\n", 1)
+		if setting.type == .Enum {
+			write_indented(&sb, "switch ", 1)
+			write_string(&sb, to_lower(setting.name))
+			write_string(&sb, " {\n")
+		}
+		for &field, i in setting.fields {
+			switch setting.type {
+			case .Enum:
+				write_indented(&sb, "case .", 1)
+				write_string(&sb, field.name)
+				write_string(&sb, ":\n	")
+				write_string_builder_start(&sb, 1)
+				write_string(&sb, "\"\\\"")
+				write_string(&sb, field.lowercase ? to_lower(field.name) : field.name)
+				write_string(&sb, "\\\"\"")
+			case .Struct:
+			// write_string_builder_start(&sb, 1)
+			// if i == 0 {
+			// 	write_string(&sb, "\"{\\\"")
+			// } else {
+			// 	write_string(&sb, "\",\\\"")
+			// }
+			// write_string(&sb, field.name)
+			// write_string(&sb, "\\\":\"")
+			// write_string(&sb, ")\n")
+			}
+
+			if field.type.is_array {
+				// write_for_loops(&sb, setting.name, field, 1)
+			} else {
+				if setting.type == Odin_Type.Enum {
+					field.type.is_enum = true
+				}
+				// write_field_value(&sb, field, setting.name, true, 1)
+			}
+		}
+		switch setting.type {
+		case .Enum:
+			write_indented(&sb, "}", 1)
+		case .Struct:
+			write_string_builder_start(&sb, 1)
+			write_string(&sb, "\"}\")")
+		}
+
+		write_string(&sb, "\n}\n\n")
+	}
+
+	return strings.to_string(sb)
+
 }

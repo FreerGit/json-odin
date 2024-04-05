@@ -16,6 +16,13 @@ tasks:
     deps: 
       - build
     silent: true
+
+  test:
+    cmds:
+      - ./target/json test
+      - odin test test  -o:none -debug -ignore-unknown-attributes
+    sources:
+      - ./src/**/*.odin
   
 
 interval: 250ms
