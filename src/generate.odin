@@ -283,9 +283,13 @@ parse_field_value :: proc(
 ) {
 	using strings
 	switch field.type.kind {
-	case "int":
+	case "int", "i64", "i32", "i16", "i8":
 		write_indented(sb, field.name, 1)
 		write_string(sb, " := parse_int(json[ptr: ptr + offset")
+		write_string(sb, "]) or_return\n")
+	case "uint", "u64", "u32", "u16", "u8":
+		write_indented(sb, field.name, 1)
+		write_string(sb, " := parse_uint(json[ptr: ptr + offset")
 		write_string(sb, "]) or_return\n")
 	}
 	// write_string(sb, ")\n")
@@ -353,8 +357,10 @@ generate_deserialization_procs :: proc(file_name: string, pkg: string, settings:
 				write_string(&sb, ".")
 				write_string(&sb, to_lower(field.name))
 				write_string(&sb, " = ")
-
+				write_string(&sb, field.type.kind)
+				write_string(&sb, "(")
 				write_string(&sb, field.name)
+				write_string(&sb, ")")
 				write_string(&sb, "\n")
 			}
 		}

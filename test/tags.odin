@@ -4,7 +4,10 @@ package json_test
 import "core:strings"
 import "core:testing"
 
-@(json = {deserialization = false}) // Only generate l_to_json (skip l_from_json)
+
+// Only generate l_to_json (skip l_from_json)
+// You could also set serialization = false, then no procs would be generated for L.
+@(json = {deserialization = false})
 L :: struct {
 	the_enum: Enum_with_lowercase,
 }
