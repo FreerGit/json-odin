@@ -85,7 +85,8 @@ write_field_value :: proc(
 		write_field_access_by_name(sb, type_name, field, to_access)
 		write_string(sb, ")")
 	case "f64", "f32", "f16":
-		// TODO
+		// strconv.generic_ftoa(buf[:], 43243.555, 'G', 6, 64)
+
 		write_given_builder_start(sb, "f64", ident)
 		write_string(sb, "f64(")
 		write_field_access_by_name(sb, type_name, field, to_access)
@@ -290,6 +291,10 @@ parse_field_value :: proc(
 	case "uint", "u64", "u32", "u16", "u8":
 		write_indented(sb, field.name, 1)
 		write_string(sb, " := parse_uint(json[ptr: ptr + offset")
+		write_string(sb, "]) or_return\n")
+	case "f64", "f32", "f16":
+		write_indented(sb, field.name, 1)
+		write_string(sb, " := parse_f64(json[ptr: ptr + offset")
 		write_string(sb, "]) or_return\n")
 	}
 	// write_string(sb, ")\n")
