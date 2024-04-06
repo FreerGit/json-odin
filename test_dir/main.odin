@@ -32,7 +32,7 @@ j :: `{"can_drive":false,"state":"Alabama","days_until_expiry":55,"a":99,"b":159
 to_parse :: `{"a_bool":true,"a_string":"hellope"}`
 
 main :: proc() {
-	a_struct := A_Struct{.Car, {.Motorcycle}, true, 12345.67, {{1, 2}, {1, 2}}}
+	a_struct := A_Struct{.Car, {.Motorcycle}, {1, 2}}
 
 	buf: [128]c.char
 

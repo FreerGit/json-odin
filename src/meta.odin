@@ -126,6 +126,16 @@ fixup_enum_types :: proc(gs: ^[dynamic]Gen_Settings) {
 
 }
 
+extract_static_array_len :: proc(arr: ^ast.Array_Type) -> int {
+	if arr.len != nil {
+		len_str := arr.len.derived.(^ast.Basic_Lit).tok.text
+		len_int, ok := strconv.parse_int(len_str)
+		assert(ok)
+		return len_int
+	}
+	return 0
+}
+
 set_struct_fields :: proc(ms: ^Gen_Settings, field: ^ast.Field, t: Odin_Type) {
 	field_type, has_ft := field.type.derived.(^ast.Ident)
 	field_info, has_info := field.names[0].derived.(^ast.Ident)
@@ -149,6 +159,7 @@ set_struct_fields :: proc(ms: ^Gen_Settings, field: ^ast.Field, t: Odin_Type) {
 		array_ident, has_ident := field_array.elem.derived.(^ast.Ident)
 		array_type, is_nested := field.type.derived.(^ast.Array_Type)
 		if has_ident {
+			data_type.arr_len_fixed = extract_static_array_len(array_type)
 			data_type.ptr_depth += 1
 			data_type.kind = array_ident.name
 		} else {
@@ -157,12 +168,7 @@ set_struct_fields :: proc(ms: ^Gen_Settings, field: ^ast.Field, t: Odin_Type) {
 				array_ident, bottom := array_type.elem.derived.(^ast.Ident)
 				data_type.ptr_depth += 1
 				if bottom {
-					if array_type.len != nil {
-						len_str := array_type.len.derived.(^ast.Basic_Lit).tok.text
-						len_int, ok := strconv.parse_int(len_str)
-						assert(ok)
-						data_type.arr_len_fixed = len_int
-					}
+					data_type.arr_len_fixed = extract_static_array_len(array_type)
 					data_type.kind = array_ident.name
 					break
 				}

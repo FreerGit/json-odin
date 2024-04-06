@@ -112,10 +112,10 @@ import "core:fmt"
 write_for_loops :: proc(sb: ^strings.Builder, name: string, field: Odin_Field, start_ident: int) {
 	using strings
 
-	prev_access_name := ""
 	builder := strings.builder_make()
 	name_with_access := fmt.sbprintf(&builder, "%s.%s", name, field.name)
-	list_of_prev_names: [dynamic]string = {to_lower(clone(name_with_access))}
+	prev_access_name := to_lower(clone(name_with_access))
+	list_of_prev_names: [dynamic]string = {clone(prev_access_name)}
 	builder_destroy(&builder)
 
 	assert(field.type.is_array)
@@ -124,6 +124,7 @@ write_for_loops :: proc(sb: ^strings.Builder, name: string, field: Odin_Field, s
 	for depth in 0 ..< field.type.ptr_depth {
 		defer builder_destroy(&builder)
 		access_name := fmt.sbprintf(&builder, "%s%d", "ele_", depth)
+		log.debug(field.type)
 		if depth != field.type.ptr_depth - 1 || field.type.arr_len_fixed == 0 {
 			write_indented(sb, "for ", start_ident + depth)
 			write_string(sb, access_name)
@@ -163,6 +164,7 @@ write_for_loops :: proc(sb: ^strings.Builder, name: string, field: Odin_Field, s
 				write_string_builder_start(sb, start_ident + depth + 2)
 				write_string(sb, "\",\")\n")
 				write_indented(sb, "}\n", start_ident + depth + 1)
+				write_indented(sb, "}\n", start_ident + depth)
 			}
 		}
 
