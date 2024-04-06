@@ -200,6 +200,9 @@ generate_file_header :: proc(file_name: string, pkg: string, settings: []Gen_Set
 	write_string(&sb, "\n\n")
 	write_string(&sb, "// This file is auto generated through json-odin\n")
 	write_string(&sb, "// For more information, visit: https://github.com/FreerGit/json-odin\n\n")
+	write_string(&sb, "import \"core:mem\"\n")
+	write_string(&sb, "import \"core:strconv\"\n")
+	write_string(&sb, "import \"core:fmt\"\n") // TODO remove
 	write_string(&sb, "import \"core:strings\"\n\n")
 	return to_string(sb)
 }
@@ -268,11 +271,28 @@ generate_serialization_procs :: proc(file_name: string, pkg: string, settings: [
 	return strings.to_string(sb)
 }
 
+parse_field_value :: proc(
+	sb: ^strings.Builder,
+	field: Odin_Field,
+	type_name: string,
+	to_access: bool,
+	ident: int,
+) {
+	using strings
+	switch field.type.kind {
+	case "int":
+		write_indented(sb, field.name, 1)
+		write_string(sb, " := parse_int(json[ptr: ptr + offset")
+		write_string(sb, "]) or_return\n")
+	}
+	// write_string(sb, ")\n")
+}
+
 
 generate_deserialization_procs :: proc(file_name: string, pkg: string, settings: []Gen_Settings) -> string {
 	using strings
 	sb := builder_make()
-	for setting in settings {
+	for setting, i in settings {
 		write_string(&sb, to_lower(setting.name))
 		write_string(&sb, "_from_json :: proc(")
 		write_string(&sb, to_lower(setting.name))
@@ -281,8 +301,11 @@ generate_deserialization_procs :: proc(file_name: string, pkg: string, settings:
 			write_string(&sb, "^")
 		}
 		write_string(&sb, setting.name)
-		write_string(&sb, ", sb: ^strings.Builder) #no_bounds_check {\n")
+		write_string(&sb, ", json: string, allo: mem.Allocator = context.allocator) -> bool {\n")
 		write_indented(&sb, "using strings\n", 1)
+		write_indented(&sb, "using strconv\n", 1)
+		write_indented(&sb, "ptr := 0\n", 1)
+		write_indented(&sb, "offset := 0\n", 1)
 		if setting.type == .Enum {
 			write_indented(&sb, "switch ", 1)
 			write_string(&sb, to_lower(setting.name))
@@ -291,23 +314,26 @@ generate_deserialization_procs :: proc(file_name: string, pkg: string, settings:
 		for &field, i in setting.fields {
 			switch setting.type {
 			case .Enum:
-				write_indented(&sb, "case .", 1)
-				write_string(&sb, field.name)
-				write_string(&sb, ":\n	")
-				write_string_builder_start(&sb, 1)
-				write_string(&sb, "\"\\\"")
-				write_string(&sb, field.lowercase ? to_lower(field.name) : field.name)
-				write_string(&sb, "\\\"\"")
-			case .Struct:
-			// write_string_builder_start(&sb, 1)
-			// if i == 0 {
-			// 	write_string(&sb, "\"{\\\"")
-			// } else {
-			// 	write_string(&sb, "\",\\\"")
-			// }
+			// write_indented(&sb, "case .", 1)
 			// write_string(&sb, field.name)
-			// write_string(&sb, "\\\":\"")
-			// write_string(&sb, ")\n")
+			// write_string(&sb, ":\n	")
+			// write_string_builder_start(&sb, 1)
+			// write_string(&sb, "\"\\\"")
+			// write_string(&sb, field.lowercase ? to_lower(field.name) : field.name)
+			// write_string(&sb, "\\\"\"")
+			case .Struct:
+				skip := len(field.name) + 2 + 2 // {" + len_of_name + ":
+				if i == 0 {
+					write_indented(&sb, "ptr = ", 1)
+					write_int(&sb, skip)
+					write_string(&sb, "\n")
+					write_indented(&sb, "offset = find_next_delim_or_end(json[ptr:], ',')\n", 1)
+				} else {
+					write_indented(&sb, "ptr = ptr + offset\n", 1)
+					write_indented(&sb, "offset = find_next_delim_or_end(json[ptr:], ':')\n", 1)
+					write_indented(&sb, "ptr = ptr + offset + 1\n", 1)
+					write_indented(&sb, "offset = find_next_delim_or_end(json[ptr:], ',')\n", 1)
+				}
 			}
 
 			if field.type.is_array {
@@ -316,18 +342,25 @@ generate_deserialization_procs :: proc(file_name: string, pkg: string, settings:
 				if setting.type == Odin_Type.Enum {
 					field.type.is_enum = true
 				}
-				// write_field_value(&sb, field, setting.name, true, 1)
+				parse_field_value(&sb, field, setting.name, true, 1)
+				write_indented(&sb, to_lower(setting.name), 1)
+				write_string(&sb, ".")
+				write_string(&sb, to_lower(field.name))
+				write_string(&sb, " = ")
+
+				write_string(&sb, field.name)
+				write_string(&sb, "\n")
 			}
 		}
 		switch setting.type {
 		case .Enum:
-			write_indented(&sb, "}", 1)
+		// write_indented(&sb, "}", 1)
 		case .Struct:
-			write_string_builder_start(&sb, 1)
-			write_string(&sb, "\"}\")")
+		// write_string_builder_start(&sb, 1)
+		// write_string(&sb, "\"}\")")
 		}
 
-		write_string(&sb, "\n}\n\n")
+		write_indented(&sb, "return true\n}\n\n", 1)
 	}
 
 	return strings.to_string(sb)

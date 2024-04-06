@@ -75,8 +75,10 @@ main :: proc() {
 	os.write(gen_handle, transmute([]u8)header)
 	ser_procs := generate_serialization_procs(JSON_GEN_FILENAME, pkg.name, gen_settings[:])
 	os.write(gen_handle, transmute([]u8)ser_procs)
-	// unmarshal_procs := generate_unmarshal_procs(MARSHAL_GEN_FILENAME, pkg.name, gen_settings[:])
-	// os.write(gen_handle, transmute([]u8)unmarshal_procs)
+	de_procs := generate_deserialization_procs(JSON_GEN_FILENAME, pkg.name, gen_settings[:])
+	os.write(gen_handle, transmute([]u8)de_procs)
+	helper_procs := generate_helper_procs()
+	os.write(gen_handle, transmute([]u8)helper_procs)
 
 	package_location := make(map[string]string)
 	defer delete(package_location)

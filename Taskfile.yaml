@@ -23,6 +23,8 @@ tasks:
       - odin test test  -o:none -debug -ignore-unknown-attributes
     sources:
       - ./src/**/*.odin
+    deps:
+      - build
   
 
 interval: 250ms
