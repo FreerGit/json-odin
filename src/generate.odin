@@ -86,11 +86,14 @@ write_field_value :: proc(
 		write_string(sb, ")")
 	case "f64", "f32", "f16":
 		// strconv.generic_ftoa(buf[:], 43243.555, 'G', 6, 64)
-
-		write_given_builder_start(sb, "f64", ident)
+		write_indented(sb, "write_bytes(sb, ", 1)
+		write_string(sb, "generic_ftoa(float_buff[:], ")
+		// strconv.generic_ftoa()
 		write_string(sb, "f64(")
 		write_field_access_by_name(sb, type_name, field, to_access)
-		write_string(sb, "), 'f'")
+		write_string(sb, "), 'f', 6, 64)")
+	// write_indented(sb, "float_buff = {}\n", 1)
+
 	case:
 		// log.warn(field)
 		log.warn("Unknown type:", field.type.kind, "<- might be recursive, otherwise unsupported.")
@@ -204,7 +207,9 @@ generate_file_header :: proc(file_name: string, pkg: string, settings: []Gen_Set
 	write_string(&sb, "import \"core:mem\"\n")
 	write_string(&sb, "import \"core:strconv\"\n")
 	write_string(&sb, "import \"core:fmt\"\n") // TODO remove
-	write_string(&sb, "import \"core:strings\"\n\n")
+	write_string(&sb, "import \"core:strings\"\n")
+	write_string(&sb, "import \"core:strconv/decimal\"\n\n")
+
 	return to_string(sb)
 }
 
@@ -224,6 +229,16 @@ generate_serialization_procs :: proc(file_name: string, pkg: string, settings: [
 		}
 		write_string(&sb, setting.name)
 		write_string(&sb, ", sb: ^strings.Builder) #no_bounds_check {\n")
+		write_indented(&sb, "using strings\n", 1)
+		stop := false
+		for field in setting.fields {
+			if stop do break
+			switch field.type.kind {
+			case "f64", "f32", "f16":
+				write_indented(&sb, "float_buff: [32]byte\n", 1)
+				stop = true
+			}
+		}
 		write_indented(&sb, "using strings\n", 1)
 		if setting.type == .Enum {
 			write_indented(&sb, "switch ", 1)

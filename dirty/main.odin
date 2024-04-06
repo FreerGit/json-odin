@@ -7,6 +7,7 @@ import "core:simd"
 import "core:strconv"
 import "core:strings"
 
+
 @(json)
 Floats :: struct {
 	_f64: f64,
