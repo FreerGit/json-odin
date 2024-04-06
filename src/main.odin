@@ -9,7 +9,7 @@ import "core:os"
 import "core:strings"
 
 
-MARSHAL_GEN_FILENAME := "gen_json.odin"
+JSON_GEN_FILENAME := "gen_json.odin"
 main :: proc() {
 	context.logger = log.create_console_logger()
 	a: mem.Arena
@@ -63,7 +63,7 @@ main :: proc() {
 
 	pkg, success := parser.parse_package_from_path(source_path, &p)
 
-	gen_file := strings.concatenate({pkg.fullpath, "/", MARSHAL_GEN_FILENAME})
+	gen_file := strings.concatenate({pkg.fullpath, "/", JSON_GEN_FILENAME})
 	gen_handle, open_err := os.open(gen_file, os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0o755)
 
 	if open_err != os.ERROR_NONE {
@@ -71,10 +71,10 @@ main :: proc() {
 		panic("could not open gen file")
 	}
 
-	header := generate_file_header(MARSHAL_GEN_FILENAME, pkg.name, gen_settings[:])
+	header := generate_file_header(JSON_GEN_FILENAME, pkg.name, gen_settings[:])
 	os.write(gen_handle, transmute([]u8)header)
-	marshal_procs := generate_marshal_procs(MARSHAL_GEN_FILENAME, pkg.name, gen_settings[:])
-	os.write(gen_handle, transmute([]u8)marshal_procs)
+	ser_procs := generate_serialization_procs(JSON_GEN_FILENAME, pkg.name, gen_settings[:])
+	os.write(gen_handle, transmute([]u8)ser_procs)
 	// unmarshal_procs := generate_unmarshal_procs(MARSHAL_GEN_FILENAME, pkg.name, gen_settings[:])
 	// os.write(gen_handle, transmute([]u8)unmarshal_procs)
 

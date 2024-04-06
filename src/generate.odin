@@ -204,7 +204,7 @@ generate_file_header :: proc(file_name: string, pkg: string, settings: []Gen_Set
 	return to_string(sb)
 }
 
-generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Gen_Settings) -> string {
+generate_serialization_procs :: proc(file_name: string, pkg: string, settings: []Gen_Settings) -> string {
 	using strings
 	sb := builder_make()
 	for setting in settings {
@@ -269,7 +269,7 @@ generate_marshal_procs :: proc(file_name: string, pkg: string, settings: []Gen_S
 }
 
 
-generate_unmarshal_procs :: proc(file_name: string, pkg: string, settings: []Gen_Settings) -> string {
+generate_deserialization_procs :: proc(file_name: string, pkg: string, settings: []Gen_Settings) -> string {
 	using strings
 	sb := builder_make()
 	for setting in settings {
