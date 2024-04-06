@@ -211,6 +211,9 @@ generate_serialization_procs :: proc(file_name: string, pkg: string, settings: [
 	using strings
 	sb := builder_make()
 	for setting in settings {
+		if !setting.gen_serialization {
+			continue // Do not generate serialization procs.
+		}
 		write_string(&sb, to_lower(setting.name))
 		write_string(&sb, "_to_json :: proc(")
 		write_string(&sb, to_lower(setting.name))
@@ -234,7 +237,7 @@ generate_serialization_procs :: proc(file_name: string, pkg: string, settings: [
 				write_string(&sb, ":\n	")
 				write_string_builder_start(&sb, 1)
 				write_string(&sb, "\"\\\"")
-				write_string(&sb, field.lowercase ? to_lower(field.name) : field.name)
+				write_string(&sb, setting.lowercase ? to_lower(field.name) : field.name)
 				write_string(&sb, "\\\"\"")
 			case .Struct:
 				write_string_builder_start(&sb, 1)
@@ -293,6 +296,9 @@ generate_deserialization_procs :: proc(file_name: string, pkg: string, settings:
 	using strings
 	sb := builder_make()
 	for setting, i in settings {
+		if !setting.gen_deserialization {
+			continue // Do not generate deserialization procs.
+		}
 		write_string(&sb, to_lower(setting.name))
 		write_string(&sb, "_from_json :: proc(")
 		write_string(&sb, to_lower(setting.name))

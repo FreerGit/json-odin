@@ -5,10 +5,13 @@ import "core:odin/ast"
 import "core:strconv"
 
 Gen_Settings :: struct {
-	name:   string,
-	strict: bool,
-	type:   Odin_Type,
-	fields: [dynamic]Odin_Field,
+	name:                string,
+	strict:              bool,
+	type:                Odin_Type,
+	gen_deserialization: bool,
+	gen_serialization:   bool,
+	lowercase:           bool,
+	fields:              [dynamic]Odin_Field,
 }
 
 Odin_Type :: enum {
@@ -17,10 +20,9 @@ Odin_Type :: enum {
 }
 
 Odin_Field :: struct {
-	name:      string,
-	type:      Data_Type,
-	tag:       string,
-	lowercase: bool,
+	name: string,
+	type: Data_Type,
+	tag:  string,
 }
 
 
@@ -31,27 +33,6 @@ Data_Type :: struct {
 	arr_len_fixed: int,
 	ptr_depth:     int, // [][]bar == 2
 }
-
-// TODO handle keys such as static, lowercase.
-// if has_fv {
-// 	cmp_lit, has_cmp := fv.value.derived.(^ast.Comp_Lit)
-// 	if has_cmp {
-// 		for elem in cmp_lit.elems {
-// 			fv, ok := elem.derived.(^ast.Field_Value)
-// 			assert(ok, "no field value")
-// 			ident_key := fv.field.derived.(^ast.Ident) or_return
-// 			ident_value := fv.value.derived.(^ast.Ident) or_return
-// 			if ident_key.name == "strict" && ident_value.name == "false" {
-// 				ms.strict = false
-// 			}
-// 			if is_enum && ident_key.name == "lowercase" && ident_value.name == "true" {
-// 				for f in &ms.fields {
-// 					f.lowercase = true
-// 				}
-// 			}
-// 		}
-// 	}
-// }
 
 
 extract_gen_settings :: proc(val: ^ast.Value_Decl) -> (ms: Gen_Settings, ok: bool) {
@@ -73,13 +54,41 @@ extract_gen_settings :: proc(val: ^ast.Value_Decl) -> (ms: Gen_Settings, ok: boo
 
 
 			if ident.name == "json" {
-
+				log.debug(val.values)
+				log.debug(ident)
 				as_struct, is_struct := val.values[0].derived.(^ast.Struct_Type)
 				as_enum, is_enum := val.values[0].derived.(^ast.Enum_Type)
 				ms := Gen_Settings {
-					name   = type_ident.name,
-					strict = true,
+					name                = type_ident.name,
+					strict              = true,
+					gen_deserialization = true,
+					gen_serialization   = true,
 				}
+				// Check tags
+				if has_fv {
+					cmp_lit, has_cmp := fv.value.derived.(^ast.Comp_Lit)
+					if has_cmp {
+						for elem in cmp_lit.elems {
+							fv, ok := elem.derived.(^ast.Field_Value)
+							assert(ok, "no field value")
+							ident_key := fv.field.derived.(^ast.Ident) or_return
+							ident_value := fv.value.derived.(^ast.Ident) or_return
+							if ident_key.name == "strict" && ident_value.name == "false" {
+								ms.strict = false
+							}
+							if is_enum && ident_key.name == "lowercase" && ident_value.name == "true" {
+								ms.lowercase = true
+							}
+							if ident_key.name == "deserialization" && ident_value.name == "false" {
+								ms.gen_deserialization = false
+							}
+							if ident_key.name == "serialization" && ident_value.name == "false" {
+								ms.gen_serialization = false
+							}
+						}
+					}
+				}
+
 				if is_struct {
 					ms.type = .Struct
 					for field in as_struct.fields.list {
@@ -101,6 +110,7 @@ extract_gen_settings :: proc(val: ^ast.Value_Decl) -> (ms: Gen_Settings, ok: boo
 					}
 				}
 
+				log.debug(ms)
 				return ms, true
 			}
 		}
