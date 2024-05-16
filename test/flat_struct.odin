@@ -41,11 +41,17 @@ Floats :: struct {
 
 @(test)
 floats_struct_test :: proc(t: ^testing.T) {
-	str := `{"_f64":43434.555,"_f32":123.456,"_f16":999.999}`
+	str := `{"_f64":43434.555,"_f32":123.4567,"_f16":1.999}`
 	fs := Floats{}
 	floats_from_json(&fs, str)
-	fs_assert := Floats{43434.555, 123.456, 999.999}
+	fs_assert := Floats{43434.555, 123.4567, 1.999}
 	testing.expect_value(t, fs, fs_assert)
+
+	str_2 := `{"_f64":434343.5555,"_f32":111111.45678,"_f16":1.9999}`
+	fs = Floats{}
+	floats_from_json(&fs, str_2)
+	fs_assert_2 := Floats{434343.5555, 111111.45678, 1.9999}
+	testing.expect_value(t, fs, fs_assert_2)
 
 	// sb := strings.builder_make()
 	// floats_to_json(&fs, &sb)
